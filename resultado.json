@@ -142,12 +142,18 @@
       "resultado": true
     },
     {
+      "claim": "Um clone limpo do repo operacional compila e passa os 50 testes, sem arquivo faltando",
+      "p": 0.85,
+      "resultado": true
+    },
+    {
       "claim": "A janela de DNS rebinding na guarda de destino do webhook é atravessável por um atacante que controla o DNS do host registrado",
       "p": 0.9,
-      "resultado": null
+      "resultado": null,
+      "por_que_null": "não verificada, de propósito: verificar exigiria atacar o próprio serviço. Está declarada como risco conhecido, não como item atendido."
     }
   ],
-  "nota_sobre_previsoes": "Três das quatro fechadas saíram melhor do que eu esperava, duas por margem larga. Isso é subconfiança sistemática, que é defeito de calibração igual ao excesso. O mecanismo que eu consigo nomear está na previsão de 0,35: contei o risco das APIs novas duas vezes, uma no build (onde ele de fato apareceu) e outra no comportamento, onde já tinha sido pago. A quinta está aberta de propósito: eu não a fechei porque não tratei o risco, e fechá-la exigiria atacar o próprio serviço.",
+  "nota_sobre_previsoes": "Brier medido pelo servidor de previsões sobre as cinco fechadas: 0,1500 (comando: previsao brier --by sessao-truco-brasa; previsao abertas devolve vazio). Três das cinco saíram melhor do que eu esperava, duas por margem larga. Isso é subconfiança sistemática, que é defeito de calibração igual ao excesso. O mecanismo que eu consigo nomear está na previsão de 0,35: contei o risco das APIs novas duas vezes, uma no build (onde ele de fato apareceu) e outra no comportamento, onde já tinha sido pago. A sexta está aberta de propósito: eu não a fechei porque não tratei o risco, e fechá-la exigiria atacar o próprio serviço. E a primeira quase ficou aberta por esquecimento — eu fechei as quatro que se verificavam por comando e esqueci justamente a que se fechava por leitura. A verificação que não tem saída de terminal é a que escapa.",
   "multiagente": {
     "usou": true,
     "porque": "Um subagente, para o cliente web — a única parte inteiramente determinada pelo protocolo e que não compartilha código com o servidor. Fixei o PROTOCOLO.md primeiro, justamente para poder construir servidor e cliente em paralelo. NÃO deleguei o motor de regras, de propósito: é a parte cuja correção invalida todo o resto, e delegar significaria não poder responder por que cada regra cita a fonte que cita.",
