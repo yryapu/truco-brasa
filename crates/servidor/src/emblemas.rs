@@ -39,7 +39,10 @@ const TODOS: &[(Emblema, Criterio)] = &[
             chave: "batismo",
             nome: "Batismo",
             descricao: "ganhou a primeira partida",
-            icone: "🃏",
+            // Não um naipe nem um coringa: ícone do bloco Playing Cards renderiza
+            // monocromático e some ao lado dos outros, que são emoji de cor. Apareceu
+            // numa captura de tela do ranking, em miniatura, como um quadrado.
+            icone: "✨",
         },
         |j| j.vitorias >= 1,
     ),

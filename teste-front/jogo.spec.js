@@ -302,10 +302,21 @@ test('a rodada resolvida fica em tela: vejo a carta do adversário e quem levou'
   await jogaveis.first().click();
 
   // O bot responde. A rodada fecha — e **continua em tela**, com as duas cartas.
+  //
+  // Repare no `btn-aceitar`: depois da minha carta o bot pode **pedir truco** em vez de
+  // jogar, e aí a rodada não fecha até eu responder. Sem isto o teste espera para sempre —
+  // e era intermitente desde que foi escrito, passando só quando o bot não pedia.
   const naRodada = p.locator('[data-teste="rodadas"] [data-carta]');
-  await expect
-    .poll(async () => naRodada.count(), { timeout: 30_000, message: 'a rodada resolvida tem de ficar' })
-    .toBeGreaterThanOrEqual(2);
+  const prazoRodada = Date.now() + 30_000;
+  while (Date.now() < prazoRodada) {
+    if ((await naRodada.count()) >= 2) break;
+    if (await t(p, 'btn-aceitar').isEnabled()) await t(p, 'btn-aceitar').click();
+    await p.waitForTimeout(100);
+  }
+  expect(
+    await naRodada.count(),
+    'a rodada resolvida tem de ficar em tela com as cartas',
+  ).toBeGreaterThanOrEqual(2);
 
   const cartas = await naRodada.evaluateAll((es) =>
     es.map((e) => e.getAttribute('data-carta')),

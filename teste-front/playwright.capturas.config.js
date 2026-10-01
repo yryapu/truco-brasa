@@ -5,9 +5,14 @@ module.exports = {
   testMatch: 'capturas.spec.js',
   timeout: 600_000,
   expect: { timeout: 30_000 },
+  // SEM isto, um clique espera para sempre. O padrão do Playwright para ação é "sem
+  // limite", e a mesa é redesenhada inteira a cada `estado` — então um clique numa carta
+  // pode pegar o elemento sendo destruído, entrar em "element was detached, retrying" e
+  // nunca sair. Foi o que travou a primeira captura por dez minutos.
   workers: 1,
   reporter: [['list']],
   use: {
+    actionTimeout: 8_000,
     baseURL: process.env.BASE || 'http://127.0.0.1:8080',
     // Escala 1: o GitHub mostra a imagem com uns 800 px de largura, então 1280 já é nítido
     // e o repositório não ganha megabytes de retina que ninguém vê.

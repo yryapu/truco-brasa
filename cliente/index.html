@@ -580,8 +580,14 @@ function tratar(m){
    case 'fim':fimDePartida(m);break;
   }
 }
+/* Teto do log: 120 linhas. Sem teto, uma pagina aberta a noite inteira acumula DOM para
+   sempre -- e nada acima dessas linhas eh lido, porque o painel rola para o fim. */
+var TETO_LOG=120;
 function logar(txt){
-  if(!txt)return;var l=$('log');l.appendChild(el('div',null,txt));l.scrollTop=l.scrollHeight;
+  if(!txt)return;
+  var l=$('log');l.appendChild(el('div',null,txt));
+  while(l.childNodes.length>TETO_LOG)l.removeChild(l.firstChild);
+  l.scrollTop=l.scrollHeight;
 }
 function nome(a){return apelidos[a]!==undefined?apelidos[a]:('assento '+a)}
 var VALORES={1:'',3:'TRUCO',6:'SEIS',9:'NOVE',12:'DOZE'};
@@ -595,9 +601,10 @@ function narrar(a){
    case 'correu':return nome(a.assento)+' correu';
    case 'mao_terminou':
      var f=a.fim||{},p=a.placar?' Placar '+a.placar[0]+' x '+a.placar[1]+'.':'';
-     if(f.como==='correu')return 'dupla '+f.vencedora+' levou '+f.pontos+' ponto(s) porque o outro lado correu.'+p;
-     if(f.como==='onze_recusada')return 'mão de onze recusada: dupla '+f.vencedora+' levou '+f.pontos+' ponto(s).'+p;
-     return 'dupla '+f.vencedora+' fez a mão, '+f.pontos+' pontos.'+p;
+     var pn=function(n){return n+(n===1?' ponto':' pontos')};
+     if(f.como==='correu')return 'dupla '+f.vencedora+' levou '+pn(f.pontos)+' porque o outro lado correu.'+p;
+     if(f.como==='onze_recusada')return 'mão de onze recusada: dupla '+f.vencedora+' levou '+pn(f.pontos)+'.'+p;
+     return 'dupla '+f.vencedora+' fez a mão, '+pn(f.pontos)+'.'+p;
    case 'mao_resolvida':return '';
    case 'mao_de_onze':return 'mão de onze para a dupla '+a.equipe;
    case 'mao_de_ferro':return 'mão de ferro';
@@ -641,10 +648,14 @@ function desenharFaixas(rs,s,n){
     ul.appendChild(a);
   }
 }
+/* Teto do historico: 200 maos, que sao umas quinze partidas. O historico atravessa
+   partidas na mesma sessao, entao sem teto ele cresce enquanto a aba estiver aberta. */
+var TETO_HIST=200;
 function registrarMao(a){
   var minhaEq=ultimoEstado?ultimoEstado.equipe:(equipes[meuAssento]!==undefined?equipes[meuAssento]:0);
   historico.push({partida:nPartida,numero:a.numero,vira:a.vira,manilha:a.manilha,rodadas:a.rodadas||[],fim:a.fim||{},
     placar:a.placar||[0,0],valor:a.valor,nomes:JSON.parse(JSON.stringify(apelidos)),equipes:JSON.parse(JSON.stringify(equipes)),n:nJog,minhaEq:minhaEq});
+  while(historico.length>TETO_HIST)historico.shift();
   prevRodF=0;
   renderHist();
 }
@@ -672,7 +683,7 @@ function renderHist(){
     var ctx={nome:nomeDe,eqOf:function(a){return e.equipes[a]!==undefined?e.equipes[a]:(e.n===2?a:a%2)},minhaEq:e.minhaEq,jog:fJog};
     var li=el('li','mao-h '+res);
     var cab=el('div','cab-m');
-    cab.appendChild(el('strong',null,'Mão '+e.numero));
+    cab.appendChild(el('strong',null,'Mão '+(e.numero+1)));
     if(e.vira){cab.appendChild(document.createTextNode('vira '));cab.appendChild(cartaEl(e.vira,'span','mini'))}
     cab.appendChild(el('span',null,'manilha '+e.manilha));
     if(e.valor!==undefined&&e.valor!==null)cab.appendChild(el('span',e.valor>1?'tag-t':'pl','valeu '+e.valor));
@@ -681,12 +692,16 @@ function renderHist(){
     var ol=el('ol');
     e.rodadas.forEach(function(r,i){ol.appendChild(rodadaFaixa(r,i,ctx,false))});
     li.appendChild(ol);
+    /* "Nós" e "Eles" sao ambos plurais, entao o verbo vai no plural -- "Eles FEZ a mao"
+       apareceu numa captura de tela e eu so vi porque olhei a imagem. E `pontos` concorda
+       com o numero em vez de sair "1 ponto(s)". */
     var f=e.fim,qm=function(v){return v===e.minhaEq?'Nós':'Eles'};
+    var pts=function(n){return n+(n===1?' ponto':' pontos')};
     var tx;
     if(f.vencedora===null||f.vencedora===undefined)tx='Empatou: ninguém pontuou.';
-    else if(f.como==='correu')tx=qm(f.vencedora)+' levou '+f.pontos+' ponto(s): o outro lado correu.';
-    else if(f.como==='onze_recusada')tx=qm(f.vencedora)+' levou '+f.pontos+' ponto(s): mão de onze recusada.';
-    else tx=qm(f.vencedora)+' fez a mão: '+f.pontos+' ponto(s).';
+    else if(f.como==='correu')tx=qm(f.vencedora)+' levaram '+pts(f.pontos)+': o outro lado correu.';
+    else if(f.como==='onze_recusada')tx=qm(f.vencedora)+' levaram '+pts(f.pontos)+': mão de onze recusada.';
+    else tx=qm(f.vencedora)+' fizeram a mão: '+pts(f.pontos)+'.';
     li.appendChild(el('p',null,tx));
     li.appendChild(el('p','pl','Placar depois: Nós '+e.placar[e.minhaEq]+' x '+e.placar[1-e.minhaEq]+' Eles'));
     lista.appendChild(li);mostradas++;
@@ -726,7 +741,9 @@ function desenhar(s){
   pc.setAttribute('aria-label','placar: nós '+pl[minhaEq]+', eles '+pl[1-minhaEq]);
   /* valor da mao */
   var im=$('info-mao');limpa(im);
-  im.appendChild(el('span','l','Mão '+s.numero_da_mao+' vale'));im.appendChild(el('span','v',String(s.valor)));
+  /* +1: numero_da_mao eh indice (comeca em zero) no protocolo; na mesa a primeira mao
+     eh a 1. "Mao 0 vale 1" nao quer dizer nada para quem joga. */
+  im.appendChild(el('span','l','Mão '+(s.numero_da_mao+1)+' vale'));im.appendChild(el('span','v',String(s.valor)));
   /* vira + manilha (manilha e numero, nunca carta) */
   var iv=$('info-vira');limpa(iv);
   iv.appendChild(document.createTextNode('Vira '));iv.appendChild(cartaEl(s.vira,'span','pequena'));
@@ -849,9 +866,15 @@ function fimDePartida(m){
   var venci=minha!==null?m.vencedora===minha:ganho>0;
   f.className=venci?'vitoria':'derrota';
   f.appendChild(el('h2',null,venci?'Vitória':'Derrota'));
-  f.appendChild(el('p',null,'Dupla '+m.vencedora+' venceu. Placar '+m.placar[0]+' x '+m.placar[1]+'.'));
+  /* O placar sai na ordem "Nos x Eles", igual ao da mesa, e nao na ordem crua das duplas --
+     "Dupla 1 venceu. Placar 5 x 14" obriga quem le a lembrar qual dupla eh a dele. */
+  var pn=minha!==null?m.placar[minha]:m.placar[0], pe=minha!==null?m.placar[1-minha]:m.placar[1];
+  f.appendChild(el('p',null,(venci?'Nós fizemos ':'Eles fizeram ')+Math.max(pn,pe)+'. Placar: Nós '+pn+' x '+pe+' Eles.'));
   if(m.treino||treino)f.appendChild(el('p','dica','Partida de treino: nenhuma moeda mudou e o ranking não conta.'));
-  f.appendChild(el('p',null,'Moedas: '+m.moedas+' ('+(ganho>0?'+':'')+ganho+')'));
+  /* Em treino o ganho eh sempre zero; mostrar "(0)" so adiciona ruido onde ja esta dito que
+     nada mudou. */
+  f.appendChild(el('p',null,ganho===0?'Moedas: '+m.moedas
+    :'Moedas: '+m.moedas+' ('+(ganho>0?'+':'')+ganho+')'));
   var b=el('button',null,'Voltar ao saguão');b.type='button';
   b.onclick=function(){fechar();abrirSaguao().catch(telaEntrada)};
   f.appendChild(b);b.focus();

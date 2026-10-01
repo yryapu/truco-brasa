@@ -7,8 +7,11 @@ services:
       TRUCO_ENDERECO: "0.0.0.0:8080"
       TRUCO_BANCO: "sqlite:///tmp/truco.db"
       RUST_LOG: "info"
-      # O bot age quase na hora: o teste prova o fluxo, não a animação.
-      TRUCO_PAUSA_BOT_MS: "60"
+      # O bot age quase na hora: o teste prova o fluxo, não a animação. A captura de tela
+      # sobrescreve isto pelo ambiente do hospedeiro, porque o truco esperando resposta dura
+      # menos que um piscar com o bot rápido:
+      #   TRUCO_PAUSA_BOT_MS=2500 docker compose -f compose.teste.yaml --profile capturas run --rm capturas
+      TRUCO_PAUSA_BOT_MS: "${TRUCO_PAUSA_BOT_MS:-60}"
     tmpfs: ["/tmp"]
     read_only: true
     security_opt: ["no-new-privileges:true"]
@@ -48,4 +51,4 @@ services:
     environment:
       BASE: "http://truco:8080"
       CI: "1"
-    command: sh -lc "npm install --no-audit --no-fund --silent && npx playwright test --config=playwright.capturas.config.js"
+    command: sh -lc "npm install --no-audit --no-fund --silent && node semear.js && npx playwright test --config=playwright.capturas.config.js"
