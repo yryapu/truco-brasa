@@ -87,6 +87,24 @@ tudo em `aplicar`. Se as duas discordarem, quem vale é `aplicar`.
 `rodadas` traz a dupla vencedora de cada rodada já resolvida; `null` dentro da lista é rodada
 empatada.
 
+### O nome do pedido
+
+O rótulo vem do **valor proposto**, nunca do valor atual da mão:
+
+| `valor_proposto` | nome |
+|---|---|
+| 3 | TRUCO |
+| 6 | SEIS |
+| 9 | NOVE |
+| 12 | DOZE |
+
+Logo o botão de pedir, com a mão valendo 1, diz "TRUCO!" (propõe 3); com a mão em 3, diz
+"SEIS!". E o de aumentar segue `pendencia.valor_proposto`: se alguém pediu TRUCO
+(`valor_proposto: 3`), aumentar propõe 6, então o botão diz "SEIS!".
+
+Isto está escrito porque eu descrevi a tabela de um jeito e dei um exemplo contraditório no
+mesmo texto. Quem construiu o cliente achou a contradição antes de mim, e escolheu a tabela.
+
 ## Webhooks
 
 `POST` na URL registrada, corpo JSON, com:

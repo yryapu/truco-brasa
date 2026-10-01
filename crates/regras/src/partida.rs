@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 /// Quantos jogadores na mesa. O truco paulista das fontes é 2x2; o 1x1 é decisão nossa
 /// (R-28..R-31) e consiste em tratar cada jogador como uma dupla de um.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Modo {
     UmContraUm,

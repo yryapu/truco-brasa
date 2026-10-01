@@ -1,0 +1,49 @@
+[package]
+name = "truco-servidor"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Servidor do truco paulista: HTTP, WebSocket, saldo, ranking, webhooks."
+
+[[bin]]
+name = "truco"
+path = "src/main.rs"
+
+[dependencies]
+truco-regras = { path = "../regras" }
+
+axum = { version = "0.8", features = ["ws", "macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "signal"] }
+tower-http = { version = "0.7", features = ["trace", "limit"] }
+
+sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite", "migrate"] }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# argon2 0.6: o default ja traz alloc + getrandom + password-hash, que eh o que o
+# PasswordHasher usa. Nao existe mais feature "std" nesta versao.
+argon2 = "0.6"
+rand = "0.10"
+hmac = "0.13"
+sha2 = "0.11"
+base16ct = { version = "0.2", features = ["alloc"] }
+
+# reqwest 0.13 renomeou as features de TLS: "rustls" + "webpki-roots" no lugar de
+# "rustls-tls". Sem native-tls, para o container nao depender de OpenSSL do sistema.
+reqwest = { version = "0.13", features = ["json", "rustls", "webpki-roots", "http2"], default-features = false }
+uuid = { version = "1", features = ["v4", "v7"] }
+jiff = "0.2"
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+anyhow = "1"
+thiserror = "2"
+
+futures-util = "0.3"
+
+[dev-dependencies]
+tokio-tungstenite = "0.30"
+
+[lints]
+workspace = true
