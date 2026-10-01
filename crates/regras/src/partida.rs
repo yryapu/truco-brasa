@@ -540,8 +540,18 @@ impl Partida {
         let p = self.pendencia_de(assento)?;
         self.mao.valor = p.valor_proposto;
         self.mao.pendencia = None;
-        // Quem pediu continua devendo a carta: a vez volta para ele.
-        self.mao.vez = p.assento_pedinte;
+        // **`vez` não se move durante a negociação do truco.** Ela já aponta para quem está
+        // devendo a carta, e `jogar` recusa enquanto houver pendência, então não há nada a
+        // proteger mudando-a.
+        //
+        // Antes isto fazia `vez = p.assento_pedinte`, e estava errado numa cadeia de
+        // retrucos de tamanho par: depois de "A pede truco, B pede seis, A aceita", o
+        // `assento_pedinte` da pendência corrente é B — e a vez ia para B, que não devia
+        // carta nenhuma. Dali em diante a ordem de jogada corrompia, e as mãos chegavam a
+        // contagens impossíveis (um assento com 2 cartas e os outros com 0).
+        //
+        // Achado pelo teste de propriedade do bot, não pelos testes de regra: eles conferiam
+        // o `valor` da escada e nunca de quem era a vez depois dela.
         avisos.push(Aviso::Aceitou {
             assento,
             valor: self.mao.valor,

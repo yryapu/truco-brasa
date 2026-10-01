@@ -4,6 +4,27 @@
 
 const { test, expect } = require('@playwright/test');
 
+/**
+ * Abre um contexto e **garante que ele fecha** no fim do teste.
+ *
+ * `browser.newContext()` não é fechado por teste — ele vive até o navegador morrer. Sem
+ * isto, ao chegar no quinto teste havia seis páginas abertas, cada uma com um WebSocket
+ * vivo e as animações da mesa rodando; num Chromium headless dentro de container isso
+ * estrangula a CPU, e o teste que joga uma partida inteira pela interface passava de 7 s
+ * para mais de 4 min. O sintoma era "estourou o tempo" no último teste, o que faz parecer
+ * defeito do que ele testa — e não era: era deste arquivo.
+ */
+async function contexto(browser) {
+  const ctx = await browser.newContext();
+  contextosAbertos.push(ctx);
+  return ctx;
+}
+let contextosAbertos = [];
+test.afterEach(async () => {
+  await Promise.all(contextosAbertos.map((c) => c.close().catch(() => {})));
+  contextosAbertos = [];
+});
+
 /** Apelido único por execução: o banco do container sobrevive entre testes. */
 const nome = (p) => `${p}${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
 
@@ -24,9 +45,17 @@ async function procurar(pagina, modo, aposta) {
   await t(pagina, 'btn-procurar').click();
 }
 
-/** As cartas da própria mão, como texto. */
+/**
+ * As cartas da própria mão, como o **caractere Unicode** que trafega.
+ *
+ * Lê `data-carta` e não o texto: o cliente desenha a face da carta (valor nos cantos, naipe
+ * no centro), então o `textContent` é "A♠A♠" e não `🂡`. O caractere continua sendo o dado —
+ * fica em `data-carta` e no `title` exatamente para quem inspeciona poder conferir.
+ */
 async function minhaMao(pagina) {
-  return (await t(pagina, 'carta').allTextContents()).map((s) => s.trim());
+  return t(pagina, 'carta').evaluateAll((es) =>
+    es.map((e) => e.getAttribute('data-carta')),
+  );
 }
 
 /** É caractere do bloco Playing Cards, e não um 8/9/10 nem o Cavaleiro (que o truco não tem). */
@@ -64,7 +93,7 @@ async function umPasso(paginas) {
 }
 
 test('1x1: dois navegadores se encontram, jogam até 12, e o saldo fecha', async ({ browser }) => {
-  const [ca, cb] = [await browser.newContext(), await browser.newContext()];
+  const [ca, cb] = [await contexto(browser), await contexto(browser)];
   const [pa, pb] = [await ca.newPage(), await cb.newPage()];
   const [ana, bia] = [nome('ana'), nome('bia')];
 
@@ -129,7 +158,7 @@ test('1x1: dois navegadores se encontram, jogam até 12, e o saldo fecha', async
 test('o saguão mostra emblema, ranking e webhook, e o segredo aparece uma vez', async ({
   browser,
 }) => {
-  const ctx = await browser.newContext();
+  const ctx = await contexto(browser);
   const p = await ctx.newPage();
   const quem = nome('caio');
   await entrar(p, quem);
@@ -165,7 +194,7 @@ test('o saguão mostra emblema, ranking e webhook, e o segredo aparece uma vez',
 test('destino proibido é recusado pela interface com mensagem em português', async ({
   browser,
 }) => {
-  const ctx = await browser.newContext();
+  const ctx = await contexto(browser);
   const p = await ctx.newPage();
   await entrar(p, nome('duda'));
   await p.locator('#aba-hooks').click();
@@ -181,7 +210,7 @@ test('do primeiro clique à mesa em menos de um minuto', async ({ browser }) => 
   // critério que eu marcaria como atendido sem verificar, então é o que precisa de número.
   // Mede duas pessoas, do `goto` até a primeira carta na mão — não só o cadastro.
   const t0 = Date.now();
-  const [ca, cb] = [await browser.newContext(), await browser.newContext()];
+  const [ca, cb] = [await contexto(browser), await contexto(browser)];
   const [pa, pb] = [await ca.newPage(), await cb.newPage()];
 
   await Promise.all([entrar(pa, nome('rapido-a')), entrar(pb, nome('rapido-b'))]);
@@ -198,4 +227,57 @@ test('do primeiro clique à mesa em menos de um minuto', async ({ browser }) => 
       `até a carta na mão: ${atéJogar} ms`,
   );
   expect(atéJogar).toBeLessThan(60_000);
+});
+
+test('treino contra bot: jogo sozinho até o fim, e não vale moeda nem ranking', async ({
+  browser,
+}) => {
+  // Mais folgado que o padrão: a partida inteira é jogada pela interface, e cada jogada do
+  // bot passa pela rede mais a pausa dele.
+  test.setTimeout(240_000);
+  // É o caminho para quem quer jogar sem ter com quem, e provavelmente o mais usado.
+  const ctx = await contexto(browser);
+  const p = await ctx.newPage();
+  await entrar(p, nome('sozinho'));
+
+  await t(p, 'seletor-modo').selectOption('1x1');
+  await t(p, 'btn-treinar').click();
+
+  await expect(t(p, 'mesa')).toBeVisible({ timeout: 30_000 });
+  // O selo de treino tem de ser visível na mesa, não só um aviso que passa.
+  await expect(p.locator('body')).toContainText(/treino/i);
+  // Três cartas, e o adversário é um bot (nome na mesa).
+  await expect(t(p, 'carta')).toHaveCount(3);
+
+  // Joga até o fim. Só eu clico — o bot se move sozinho, então cada iteração espera um
+  // pouco se não houver nada habilitado.
+  // Laço com prazo de parede, não contagem de iterações: contado por iteração, o teto do
+  // próprio teste estourava antes e o diagnóstico abaixo nunca rodava.
+  const prazo = Date.now() + 90_000;
+  let acabou = false;
+  while (Date.now() < prazo) {
+    if (await t(p, 'fim').isVisible()) {
+      acabou = true;
+      break;
+    }
+    if (!(await umPasso([p]))) await p.waitForTimeout(120);
+  }
+  if (!acabou) {
+    // Diagnóstico: sem isto, o único sintoma é "estourou o tempo", que não diz nada.
+    const erro = await t(p, 'erro').innerText().catch(() => '(sem erro)');
+    const log = await t(p, 'log').innerText().catch(() => '(sem log)');
+    const habilitadas = await p.locator('[data-teste="carta"]:not([disabled])').count();
+    const placar = await t(p, 'placar').innerText().catch(() => '(sem placar)');
+    console.log('[diag] erro:', JSON.stringify(erro));
+    console.log('[diag] placar:', JSON.stringify(placar));
+    console.log('[diag] cartas habilitadas:', habilitadas);
+    console.log('[diag] últimas linhas do log:', JSON.stringify(log.split('\n').slice(-8)));
+  }
+  await expect(t(p, 'fim')).toBeVisible({ timeout: 30_000 });
+
+  // Nada contou: saldo intacto, nenhuma partida registrada, ainda estreante.
+  const eu = await (await p.request.get('/api/eu')).json();
+  expect(eu.moedas).toBe(1000);
+  expect(eu.partidas).toBe(0);
+  expect(eu.emblemas.map((e) => e.chave)).toContain('estreante');
 });

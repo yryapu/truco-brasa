@@ -26,6 +26,8 @@ pub enum ParaCliente {
         partida: String,
         assento: usize,
         aposta: i64,
+        /// Mesa de treino: tem bot, não vale moeda e não conta para o ranking.
+        treino: bool,
         jogadores: Vec<NaMesa>,
     },
     Estado(Visao),
@@ -41,6 +43,7 @@ pub enum ParaCliente {
         placar: [u8; 2],
         moedas: i64,
         ganho: i64,
+        treino: bool,
     },
 }
 
@@ -49,6 +52,7 @@ pub struct NaMesa {
     pub assento: usize,
     pub apelido: String,
     pub equipe: u8,
+    pub bot: bool,
 }
 
 /// Mensagem de um cliente para a mesa.
@@ -101,17 +105,49 @@ struct Contexto {
     partida_id: String,
     modo: Modo,
     aposta: i64,
+    /// Mesa com bot. Não paga, não pontua, não entra no ranking.
+    treino: bool,
+}
+
+/// Quem ocupa o assento. O bot não tem ficha no banco de propósito: ele não tem saldo a
+/// mover nem estatística a fechar, e o tipo é o que impede de esquecer isso num `if`.
+enum Ocupante {
+    Humano(Jogador),
+    Bot { apelido: String },
+}
+
+impl Ocupante {
+    fn apelido(&self) -> &str {
+        match self {
+            Ocupante::Humano(j) => &j.apelido,
+            Ocupante::Bot { apelido } => apelido,
+        }
+    }
+    fn eh_bot(&self) -> bool {
+        matches!(self, Ocupante::Bot { .. })
+    }
+    /// A ficha, quando houver. `None` para bot — e é por isso que pagamento e estatística
+    /// não têm como alcançá-lo.
+    fn humano(&self) -> Option<&Jogador> {
+        match self {
+            Ocupante::Humano(j) => Some(j),
+            Ocupante::Bot { .. } => None,
+        }
+    }
 }
 
 struct Cadeira {
-    jogador: Jogador,
+    ocupante: Ocupante,
     canal: mpsc::UnboundedSender<ParaCliente>,
     /// O socket já foi embora? Mesa não morre por causa de um `send` para quem saiu.
+    /// Bot está sempre vivo: não há socket para cair.
     vivo: bool,
 }
 
-/// Monta a mesa e roda a partida até o fim. Consome as esperas.
-pub fn abrir(estado: Estado, modo: Modo, aposta: i64, esperas: Vec<Espera>) {
+/// Monta a mesa e roda a partida até o fim. Consome as esperas, e **preenche com bot o que
+/// faltar** — o que só acontece em mesa de treino, porque a fila comum só chama isto com a
+/// mesa cheia.
+pub fn abrir(estado: Estado, modo: Modo, aposta: i64, esperas: Vec<Espera>, treino: bool) {
     tokio::spawn(async move {
         let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
         let mut cadeiras = Vec::new();
@@ -120,12 +156,25 @@ pub fn abrir(estado: Estado, modo: Modo, aposta: i64, esperas: Vec<Espera>) {
             // aí a mesa começa com um assento morto, que o laço trata como abandono.
             let vivo = e.entrou_na_mesa.send((assento, cmd_tx.clone())).is_ok();
             cadeiras.push(Cadeira {
-                jogador: e.jogador,
+                ocupante: Ocupante::Humano(e.jogador),
                 canal: e.para_cliente,
                 vivo,
             });
         }
-        if let Err(e) = rodar(estado, modo, aposta, cadeiras, cmd_rx).await {
+        for assento in cadeiras.len()..modo.assentos() {
+            // O canal do bot é o mesmo tipo do canal de um humano, e o bot recebe por ele a
+            // mesma `Visao`. É isso que o torna incapaz de ver carta alheia (ver `bot.rs`).
+            let (para_bot, do_bot) = mpsc::unbounded_channel();
+            crate::bot::soltar(assento, do_bot, cmd_tx.clone(), estado.config.pausa_do_bot);
+            cadeiras.push(Cadeira {
+                ocupante: Ocupante::Bot {
+                    apelido: crate::bot::NOMES[(assento - 1) % crate::bot::NOMES.len()].to_string(),
+                },
+                canal: para_bot,
+                vivo: true,
+            });
+        }
+        if let Err(e) = rodar(estado, modo, aposta, cadeiras, cmd_rx, treino).await {
             tracing::error!(erro = %e, "mesa terminou com erro");
         }
     });
@@ -137,6 +186,7 @@ async fn rodar(
     aposta: i64,
     mut cadeiras: Vec<Cadeira>,
     mut cmd_rx: mpsc::UnboundedReceiver<Comando>,
+    treino: bool,
 ) -> anyhow::Result<()> {
     let partida_id = uuid::Uuid::now_v7().to_string();
     let na_mesa: Vec<NaMesa> = cadeiras
@@ -144,8 +194,9 @@ async fn rodar(
         .enumerate()
         .map(|(assento, c)| NaMesa {
             assento,
-            apelido: c.jogador.apelido.clone(),
+            apelido: c.ocupante.apelido().to_string(),
             equipe: truco_regras::equipe_de(assento),
+            bot: c.ocupante.eh_bot(),
         })
         .collect();
 
@@ -161,6 +212,7 @@ async fn rodar(
         partida_id: partida_id.clone(),
         modo,
         aposta,
+        treino,
     };
     let mut partida = Partida::nova(modo, &mut rand::rng());
 
@@ -169,6 +221,7 @@ async fn rodar(
             partida: partida_id.clone(),
             assento,
             aposta,
+            treino,
             jogadores: na_mesa.clone(),
         });
     }
@@ -177,7 +230,7 @@ async fn rodar(
     webhooks::disparar(
         estado.pool.clone(),
         estado.cliente.clone(),
-        cadeiras.iter().map(|c| c.jogador.id.clone()).collect(),
+        humanos(&cadeiras),
         "partida.comecou",
         serde_json::json!({
             "evento": "partida.comecou",
@@ -186,6 +239,7 @@ async fn rodar(
                 "id": partida_id,
                 "modo": nome_do_modo(modo),
                 "aposta": aposta,
+                "treino": treino,
                 "jogadores": na_mesa,
             }
         }),
@@ -262,6 +316,15 @@ async fn rodar(
     // existia uma saída da mesa sem liquidação, e não existe.
 }
 
+/// Só os jogadores de verdade. Bot não tem webhook nem id: o `filter_map` é o que garante
+/// que nenhuma rotina de pagamento ou de entrega o alcance por engano.
+fn humanos(cadeiras: &[Cadeira]) -> Vec<String> {
+    cadeiras
+        .iter()
+        .filter_map(|c| c.ocupante.humano().map(|j| j.id.clone()))
+        .collect()
+}
+
 /// Quem está devendo uma ação agora. É de quem o relógio corre.
 fn quem_deve_agir(partida: &Partida) -> usize {
     let m = &partida.mao;
@@ -328,8 +391,9 @@ async fn encerrar(
         partida_id,
         modo,
         aposta,
+        treino,
     } = ctx;
-    let (modo, aposta) = (*modo, *aposta);
+    let (modo, aposta, treino) = (*modo, *aposta, *treino);
     let placar = partida.placar;
     // A aposta foi debitada de todos na entrada. O bolo é `n * aposta` e vai inteiro para os
     // vencedores, em partes iguais: cada vencedor recebe `2 * aposta` e fica com `+aposta`
@@ -354,42 +418,66 @@ async fn encerrar(
     for (assento, c) in cadeiras.iter().enumerate() {
         let ganhou = truco_regras::equipe_de(assento) as u8 == vencedora;
         if ganhou {
-            bd::creditar(&estado.pool, &c.jogador.id, por_vencedor).await?;
-            vencedores.push(c.jogador.apelido.clone());
+            vencedores.push(c.ocupante.apelido().to_string());
         } else {
-            perdedores.push(c.jogador.apelido.clone());
+            perdedores.push(c.ocupante.apelido().to_string());
         }
-        bd::registrar_resultado(&estado.pool, &c.jogador.id, ganhou, lavada).await?;
+        // Treino não paga e não pontua, e bot não tem ficha para pagar nem pontuar. As duas
+        // condições são diferentes e as duas importam: sem a primeira, o ranking vira
+        // treino acumulado (que é o risco de farm que esta v1 declarou); sem a segunda,
+        // moeda sairia do nada para a mão do bot.
+        let Some(jogador) = c.ocupante.humano().filter(|_| !treino) else {
+            continue;
+        };
+        if ganhou {
+            bd::creditar(&estado.pool, &jogador.id, por_vencedor).await?;
+        }
+        bd::registrar_resultado(&estado.pool, &jogador.id, ganhou, lavada).await?;
     }
 
     for (assento, c) in cadeiras.iter().enumerate() {
         let ganhou = truco_regras::equipe_de(assento) as u8 == vencedora;
-        let moedas = bd::por_id(&estado.pool, &c.jogador.id)
-            .await?
-            .map_or(0, |j| j.moedas);
+        let moedas = match c.ocupante.humano() {
+            Some(j) => bd::por_id(&estado.pool, &j.id)
+                .await?
+                .map_or(0, |j| j.moedas),
+            None => 0,
+        };
         let _ = c.canal.send(ParaCliente::Fim {
             vencedora,
             placar,
             moedas,
-            ganho: if ganhou { aposta } else { -aposta },
+            ganho: if treino {
+                0
+            } else if ganhou {
+                aposta
+            } else {
+                -aposta
+            },
+            treino,
         });
     }
 
     webhooks::disparar(
         estado.pool.clone(),
         estado.cliente.clone(),
-        cadeiras.iter().map(|c| c.jogador.id.clone()).collect(),
+        humanos(cadeiras),
         "partida.terminou",
         serde_json::json!({
             "evento": "partida.terminou",
             "em": bd::agora(),
-            "partida": { "id": partida_id, "modo": nome_do_modo(modo), "aposta": aposta },
+            "partida": {
+                "id": partida_id,
+                "modo": nome_do_modo(modo),
+                "aposta": aposta,
+                "treino": treino,
+            },
             "resultado": {
                 "equipe_vencedora": vencedora,
                 "placar": placar,
                 "vencedores": vencedores,
                 "perdedores": perdedores,
-                "moedas_por_vencedor": por_vencedor,
+                "moedas_por_vencedor": if treino { 0 } else { por_vencedor },
                 "por_abandono": por_abandono,
             }
         }),

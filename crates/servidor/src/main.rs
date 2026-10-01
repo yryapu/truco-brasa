@@ -50,6 +50,15 @@ async fn main() -> anyhow::Result<()> {
         permitir_http_webhook: !seguro,
         permitir_destino_privado: webhook_local,
         prazo_de_jogada: std::time::Duration::from_secs(prazo),
+        // O bot "pensa" por padrão, porque sem pausa a mão resolve entre dois quadros e
+        // o jogador não vê o que aconteceu. O teste de interface baixa isto para não
+        // esperar por atraso cosmético — mesma razão dos testes em Rust, que usam zero.
+        pausa_do_bot: std::time::Duration::from_millis(
+            std::env::var("TRUCO_PAUSA_BOT_MS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1_100),
+        ),
     };
     let app = truco_servidor::montar(&banco, config).await?;
 

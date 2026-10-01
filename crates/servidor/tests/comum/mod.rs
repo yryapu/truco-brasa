@@ -34,6 +34,8 @@ pub async fn servidor_com_prazo(
             permitir_http_webhook: true,
             permitir_destino_privado: permitir_webhook_local,
             prazo_de_jogada: prazo,
+            // Zero: o teste não espera por atraso cosmético.
+            pausa_do_bot: std::time::Duration::ZERO,
         },
     )
     .await
@@ -127,9 +129,21 @@ impl Cliente {
     }
 
     pub async fn conectar(&self, modo: &str, aposta: i64) -> Socket {
+        self.conectar_cru(modo, aposta, false).await
+    }
+
+    /// Mesa de treino: bot nos assentos que faltam, aposta forçada a zero pelo servidor.
+    pub async fn conectar_treino(&self, modo: &str) -> Socket {
+        self.conectar_cru(modo, 0, true).await
+    }
+
+    /// A conexão sem açúcar, para o teste poder mandar combinação que um cliente honesto
+    /// não mandaria — por exemplo aposta alta junto de `bots=1`.
+    pub async fn conectar_cru(&self, modo: &str, aposta: i64, bots: bool) -> Socket {
         let url = format!(
-            "ws://{}/ws?modo={modo}&aposta={aposta}",
-            self.base.trim_start_matches("http://")
+            "ws://{}/ws?modo={modo}&aposta={aposta}&bots={}",
+            self.base.trim_start_matches("http://"),
+            u8::from(bots)
         );
         let mut req = url.into_client_request().expect("url de ws");
         req.headers_mut().insert(

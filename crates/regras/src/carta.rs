@@ -110,6 +110,12 @@ impl Numero {
         }
     }
 
+    /// A volta de `rotulo`. Serve a quem só tem a `Visao` — notadamente o bot, que precisa
+    /// calcular força e recebe a manilha como rótulo, igual a qualquer outro cliente.
+    pub fn do_rotulo(r: &str) -> Option<Numero> {
+        Numero::TODOS.into_iter().find(|n| n.rotulo() == r)
+    }
+
     /// O número seguinte na ordem de força, de forma **circular** — é o que faz a vira `3`
     /// dar manilha `4` (R-05).
     pub fn seguinte(self) -> Numero {

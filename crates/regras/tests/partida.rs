@@ -348,9 +348,15 @@ fn r15_r20_a_escada_inteira_e_o_teto_no_doze() {
     nega(&mut p, 0, Acao::Aumentar, Erro::NoDozeNaoSeAumenta);
     ok(&mut p, 0, Acao::Aceitar);
     assert_eq!(p.mao.valor, 12);
-    // A vez volta para quem propôs o doze (assento 1), e não há degrau acima.
-    assert_eq!(p.mao.vez, 1);
-    nega(&mut p, 1, Acao::Pedir, Erro::ValorNoTeto);
+    // A vez é de quem está **devendo a carta** — o assento 0, que pediu o primeiro truco
+    // antes de jogar. Ela não acompanha a cadeia de retrucos.
+    //
+    // Este teste afirmava `vez == 1` e estava errado: eu tinha codificado aqui o bug de
+    // `aceitar`, que devolvia a vez para o `assento_pedinte` da pendência corrente. Numa
+    // cadeia de tamanho par isso entrega a vez a quem não devia carta, e a ordem de jogada
+    // corrompe. Quem achou foi o teste de propriedade do bot.
+    assert_eq!(p.mao.vez, 0, "quem deve a carta é o assento 0");
+    nega(&mut p, 0, Acao::Pedir, Erro::ValorNoTeto);
 }
 
 #[test]
@@ -772,4 +778,43 @@ fn a_visao_so_contem_as_cartas_que_aquele_assento_tem_direito_de_ver() {
              nem carta aberta na mesa"
         );
     }
+}
+
+#[test]
+fn r15_a_vez_nao_acompanha_a_cadeia_de_retrucos() {
+    // O caso que o bug de `aceitar` escondia: cadeia de tamanho **par**. O assento 0 pede
+    // truco devendo a carta, o 1 pede seis, o 0 aceita. A vez tem de continuar sendo do 0.
+    let mut p = Partida::com_baralho(
+        Modo::DoisContraDois,
+        [0, 0],
+        &baralho(&[
+            "4e", "5e", "7e", "4c", "5c", "7c", "4o", "5o", "7o", "4p", "5p", "7p", "Ae",
+        ]),
+    );
+    assert_eq!(p.mao.vez, 0);
+    ok(&mut p, 0, Acao::Pedir); // truco
+    ok(&mut p, 1, Acao::Aumentar); // seis
+    ok(&mut p, 0, Acao::Aceitar);
+    assert_eq!(p.mao.valor, 6);
+    assert_eq!(
+        p.mao.vez, 0,
+        "a vez continua de quem deve a carta, não de quem pediu por último"
+    );
+
+    // E a prova que importa: a mão inteira sai com todos jogando três cartas. Com o bug, a
+    // ordem furava e algum assento acabava com carta sobrando.
+    for _ in 0..3 {
+        for _ in 0..4 {
+            if p.mao.fim.is_some() || p.vencedora.is_some() {
+                break;
+            }
+            let vez = p.mao.vez;
+            joga(&mut p, vez, 0);
+        }
+    }
+    assert_eq!(
+        p.mao.cartas.iter().map(Vec::len).collect::<Vec<_>>(),
+        vec![3, 3, 3, 3],
+        "a mão seguinte começou cheia, logo a anterior esvaziou por igual"
+    );
 }

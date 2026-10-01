@@ -6,6 +6,7 @@
 pub mod api;
 pub mod auth;
 pub mod bd;
+pub mod bot;
 pub mod emblemas;
 pub mod estado;
 pub mod falha;

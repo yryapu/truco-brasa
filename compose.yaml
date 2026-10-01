@@ -4,7 +4,9 @@ services:
     # Só no laço da máquina: a v1 não tem TLS, e publicar 0.0.0.0 exporia cookie de sessão
     # em claro na rede local. Quem for pôr em pé de verdade põe um proxy TLS na frente e
     # liga TRUCO_SEGURO=1.
-    ports: ["127.0.0.1:8080:8080"]
+    # A porta do hospedeiro é configurável porque 8080 é disputada: `TRUCO_PORTA=8477
+    # docker compose up` sobe ao lado de outra coisa sem editar este arquivo.
+    ports: ["127.0.0.1:${TRUCO_PORTA:-8080}:8080"]
     volumes: ["dados:/dados"]
     environment:
       RUST_LOG: "info,truco_servidor=debug"

@@ -18,6 +18,10 @@ pub struct Parametros {
     pub modo: String,
     #[serde(default)]
     pub aposta: i64,
+    /// `bots=1` abre uma **mesa de treino** na hora, com bot nos assentos que faltam, em vez
+    /// de entrar na fila. Treino não vale moeda nem ranking (ver `mesas::encerrar`).
+    #[serde(default)]
+    pub bots: u8,
 }
 
 pub async fn entrar(
@@ -31,17 +35,21 @@ pub async fn entrar(
         "2x2" => Modo::DoisContraDois,
         _ => return Err(Falha::ModoInvalido),
     };
-    if p.aposta < 0 || p.aposta > jogador.moedas {
+    let treino = p.bots > 0;
+    // Em treino a aposta é **forçada a zero**, não validada: deixar apostar contra bot seria
+    // imprimir moeda (o bot não tem saldo de onde ela saia). A interface diz que é treino, e
+    // aqui a regra é estrutural em vez de confiar no que o cliente mandou.
+    let aposta = if treino { 0 } else { p.aposta };
+    if aposta < 0 || aposta > jogador.moedas {
         return Err(Falha::ApostaInvalida);
     }
     // Debita **antes** de entrar na fila, e a condição de saldo está no próprio UPDATE: não
     // existe janela entre conferir e cobrar, nem com duas abas do mesmo jogador.
-    if !bd::debitar(&estado.pool, &jogador.id, p.aposta).await? {
+    if !bd::debitar(&estado.pool, &jogador.id, aposta).await? {
         return Err(Falha::ApostaInvalida);
     }
 
-    let aposta = p.aposta;
-    Ok(ws.on_upgrade(move |socket| conduzir(socket, estado, jogador, modo, aposta)))
+    Ok(ws.on_upgrade(move |socket| conduzir(socket, estado, jogador, modo, aposta, treino)))
 }
 
 async fn conduzir(
@@ -50,6 +58,7 @@ async fn conduzir(
     jogador: bd::Jogador,
     modo: Modo,
     aposta: i64,
+    treino: bool,
 ) {
     let chave: Chave = (modo, aposta);
     let (mut escritor, mut leitor) = socket.split();
@@ -91,17 +100,23 @@ async fn conduzir(
         para_cliente: para_cliente.clone(),
         entrou_na_mesa: entrou_tx,
     };
-    let pronta = estado.enfileirar(chave, espera);
-    let faltam = modo
-        .assentos()
-        .saturating_sub(estado.quantos_esperando(chave));
-    let _ = para_cliente.send(ParaCliente::Fila {
-        modo: mesas::nome_do_modo(modo),
-        aposta,
-        faltam,
-    });
-    if let Some(esperas) = pronta {
-        mesas::abrir(estado.clone(), modo, aposta, esperas);
+    if treino {
+        // Treino não passa pela fila: a mesa abre agora, com bot nos assentos que faltam.
+        // Por isso também não há o que devolver se o socket cair — nada foi cobrado.
+        mesas::abrir(estado.clone(), modo, aposta, vec![espera], true);
+    } else {
+        let pronta = estado.enfileirar(chave, espera);
+        let faltam = modo
+            .assentos()
+            .saturating_sub(estado.quantos_esperando(chave));
+        let _ = para_cliente.send(ParaCliente::Fila {
+            modo: mesas::nome_do_modo(modo),
+            aposta,
+            faltam,
+        });
+        if let Some(esperas) = pronta {
+            mesas::abrir(estado.clone(), modo, aposta, esperas, false);
+        }
     }
 
     // Enquanto espera mesa, o socket ainda pode cair. Sem isto, quem fecha a aba na fila

@@ -7,6 +7,8 @@ services:
       TRUCO_ENDERECO: "0.0.0.0:8080"
       TRUCO_BANCO: "sqlite:///tmp/truco.db"
       RUST_LOG: "info"
+      # O bot age quase na hora: o teste prova o fluxo, não a animação.
+      TRUCO_PAUSA_BOT_MS: "60"
     tmpfs: ["/tmp"]
     read_only: true
     security_opt: ["no-new-privileges:true"]

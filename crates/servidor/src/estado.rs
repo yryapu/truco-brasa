@@ -29,6 +29,10 @@ pub struct Config {
     /// nunca fecha nada — e sem prazo a mesa fica de pé para sempre com a aposta do
     /// adversário presa dentro dela.
     pub prazo_de_jogada: std::time::Duration,
+    /// Quanto o bot espera antes de agir. Não é enfeite: sem pausa, uma mão inteira resolve
+    /// entre dois quadros e o jogador não vê o que aconteceu. É configurável porque teste
+    /// não deve esperar por um atraso cosmético — os testes a põem em zero.
+    pub pausa_do_bot: std::time::Duration,
 }
 
 /// Um jogador esperando mesa.
