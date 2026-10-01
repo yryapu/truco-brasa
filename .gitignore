@@ -1,0 +1,6 @@
+target
+*.db
+*.db-*
+dados/
+node_modules
+test-results

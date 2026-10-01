@@ -1,0 +1,18 @@
+[package]
+name = "truco-regras"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Regras do truco paulista, puras: sem I/O, sem async, sem banco. Ver ADR-003."
+
+# Sem tokio, sem sqlx, sem axum. Essa fronteira eh deliberada (ADR-003): mantem o motor
+# de regras testavel em milissegundos e compilavel para wasm32 se a v2 precisar.
+[dependencies]
+rand = "0.10"
+serde = { version = "1", features = ["derive"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+serde_json = "1"
