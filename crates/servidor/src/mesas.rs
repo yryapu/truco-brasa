@@ -17,12 +17,31 @@ use crate::webhooks;
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "t", rename_all = "snake_case")]
 pub enum ParaCliente {
-    Fila { modo: &'static str, aposta: i64, faltam: usize },
-    Mesa { partida: String, assento: usize, aposta: i64, jogadores: Vec<NaMesa> },
+    Fila {
+        modo: &'static str,
+        aposta: i64,
+        faltam: usize,
+    },
+    Mesa {
+        partida: String,
+        assento: usize,
+        aposta: i64,
+        jogadores: Vec<NaMesa>,
+    },
     Estado(Visao),
-    Avisos { avisos: Vec<Aviso> },
-    Erro { erro: &'static str, mensagem: String },
-    Fim { vencedora: u8, placar: [u8; 2], moedas: i64, ganho: i64 },
+    Avisos {
+        avisos: Vec<Aviso>,
+    },
+    Erro {
+        erro: &'static str,
+        mensagem: String,
+    },
+    Fim {
+        vencedora: u8,
+        placar: [u8; 2],
+        moedas: i64,
+        ganho: i64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -76,6 +95,14 @@ pub fn nome_do_modo(m: Modo) -> &'static str {
     }
 }
 
+/// O que não muda durante a mesa. Existe para que `encerrar` receba um contexto em vez de
+/// oito parâmetros posicionais, onde trocar dois de lugar compila e paga errado.
+struct Contexto {
+    partida_id: String,
+    modo: Modo,
+    aposta: i64,
+}
+
 struct Cadeira {
     jogador: Jogador,
     canal: mpsc::UnboundedSender<ParaCliente>,
@@ -92,7 +119,11 @@ pub fn abrir(estado: Estado, modo: Modo, aposta: i64, esperas: Vec<Espera>) {
             // Se o socket morreu entre entrar na fila e a mesa abrir, este envio falha — e
             // aí a mesa começa com um assento morto, que o laço trata como abandono.
             let vivo = e.entrou_na_mesa.send((assento, cmd_tx.clone())).is_ok();
-            cadeiras.push(Cadeira { jogador: e.jogador, canal: e.para_cliente, vivo });
+            cadeiras.push(Cadeira {
+                jogador: e.jogador,
+                canal: e.para_cliente,
+                vivo,
+            });
         }
         if let Err(e) = rodar(estado, modo, aposta, cadeiras, cmd_rx).await {
             tracing::error!(erro = %e, "mesa terminou com erro");
@@ -118,16 +149,19 @@ async fn rodar(
         })
         .collect();
 
-    sqlx::query(
-        "INSERT INTO partidas (id, modo, aposta, comecou_em) VALUES (?1, ?2, ?3, ?4)",
-    )
-    .bind(&partida_id)
-    .bind(nome_do_modo(modo))
-    .bind(aposta)
-    .bind(bd::agora())
-    .execute(&estado.pool)
-    .await?;
+    sqlx::query("INSERT INTO partidas (id, modo, aposta, comecou_em) VALUES (?1, ?2, ?3, ?4)")
+        .bind(&partida_id)
+        .bind(nome_do_modo(modo))
+        .bind(aposta)
+        .bind(bd::agora())
+        .execute(&estado.pool)
+        .await?;
 
+    let ctx = Contexto {
+        partida_id: partida_id.clone(),
+        modo,
+        aposta,
+    };
     let mut partida = Partida::nova(modo, &mut rand::rng());
 
     for (assento, c) in cadeiras.iter().enumerate() {
@@ -160,10 +194,7 @@ async fn rodar(
     // Um assento que já nasceu morto encerra a partida antes do primeiro comando.
     if let Some(morto) = cadeiras.iter().position(|c| !c.vivo) {
         let vencedora = 1 - truco_regras::equipe_de(morto) as u8;
-        return encerrar(
-            &estado, &partida_id, modo, aposta, &mut cadeiras, &partida, vencedora, true,
-        )
-        .await;
+        return encerrar(&estado, &ctx, &cadeiras, &partida, vencedora, true).await;
     }
 
     while let Some(cmd) = cmd_rx.recv().await {
@@ -189,10 +220,7 @@ async fn rodar(
                     }
                 }
                 if let Some(v) = partida.vencedora {
-                    return encerrar(
-                        &estado, &partida_id, modo, aposta, &mut cadeiras, &partida, v, false,
-                    )
-                    .await;
+                    return encerrar(&estado, &ctx, &cadeiras, &partida, v, false).await;
                 }
             }
             Comando::Saiu(assento) => {
@@ -203,11 +231,7 @@ async fn rodar(
                 // está declarado nos riscos conhecidos — a alternativa (esperar reconexão)
                 // precisa de temporizador e de reentrada, que é outra onda de trabalho.
                 let vencedora = 1 - truco_regras::equipe_de(assento) as u8;
-                return encerrar(
-                    &estado, &partida_id, modo, aposta, &mut cadeiras, &partida, vencedora,
-                    true,
-                )
-                .await;
+                return encerrar(&estado, &ctx, &cadeiras, &partida, vencedora, true).await;
             }
         }
     }
@@ -237,7 +261,9 @@ fn mandar_estado(cadeiras: &[Cadeira], partida: &Partida) {
     for (assento, c) in cadeiras.iter().enumerate() {
         // Visao::para é o que garante que cada socket só recebe o que aquele assento pode
         // ver. O servidor não monta estado de jogo à mão em nenhum lugar.
-        let _ = c.canal.send(ParaCliente::Estado(Visao::para(partida, assento)));
+        let _ = c
+            .canal
+            .send(ParaCliente::Estado(Visao::para(partida, assento)));
     }
 }
 
@@ -250,14 +276,18 @@ fn difundir(cadeiras: &[Cadeira], msg: ParaCliente) {
 /// Paga, fecha a estatística, avisa a mesa e dispara o webhook de fim.
 async fn encerrar(
     estado: &Estado,
-    partida_id: &str,
-    modo: Modo,
-    aposta: i64,
-    cadeiras: &mut [Cadeira],
+    ctx: &Contexto,
+    cadeiras: &[Cadeira],
     partida: &Partida,
     vencedora: u8,
     por_abandono: bool,
 ) -> anyhow::Result<()> {
+    let Contexto {
+        partida_id,
+        modo,
+        aposta,
+    } = ctx;
+    let (modo, aposta) = (*modo, *aposta);
     let placar = partida.placar;
     // A aposta foi debitada de todos na entrada. O bolo é `n * aposta` e vai inteiro para os
     // vencedores, em partes iguais: cada vencedor recebe `2 * aposta` e fica com `+aposta`
@@ -292,7 +322,9 @@ async fn encerrar(
 
     for (assento, c) in cadeiras.iter().enumerate() {
         let ganhou = truco_regras::equipe_de(assento) as u8 == vencedora;
-        let moedas = bd::por_id(&estado.pool, &c.jogador.id).await?.map_or(0, |j| j.moedas);
+        let moedas = bd::por_id(&estado.pool, &c.jogador.id)
+            .await?
+            .map_or(0, |j| j.moedas);
         let _ = c.canal.send(ParaCliente::Fim {
             vencedora,
             placar,
@@ -321,6 +353,11 @@ async fn encerrar(
         }),
     );
 
-    tracing::info!(partida = partida_id, vencedora, por_abandono, "mesa encerrada");
+    tracing::info!(
+        partida = partida_id,
+        vencedora,
+        por_abandono,
+        "mesa encerrada"
+    );
     Ok(())
 }

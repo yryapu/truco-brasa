@@ -29,7 +29,7 @@ pub struct Webhook {
 /// Valida a URL **e o destino**. Um endpoint que faz o servidor buscar URL arbitrária é
 /// SSRF por desenho: sem esta função, um jogador registra `http://169.254.169.254/...` e usa
 /// o nosso servidor como procurador contra a nossa própria rede.
-pub async fn validar_destino(url: &str, permitir_http: bool) -> R<()> {
+pub async fn validar_destino(url: &str, permitir_http: bool, permitir_privado: bool) -> R<()> {
     let u = reqwest::Url::parse(url).map_err(|_| Falha::UrlInvalida)?;
     match u.scheme() {
         "https" => {}
@@ -49,7 +49,7 @@ pub async fn validar_destino(url: &str, permitir_http: bool) -> R<()> {
     }
     // TODOS os endereços têm de passar: um nome que resolve para um público e um privado é
     // exatamente o truque que uma allowlist ingênua deixa passar.
-    if enderecos.iter().any(|ip| !publico(*ip)) {
+    if !permitir_privado && enderecos.iter().any(|ip| !publico(*ip)) {
         return Err(Falha::DestinoProibido);
     }
     Ok(())
@@ -89,14 +89,14 @@ pub async fn registrar(
     jogador_id: &str,
     url: &str,
     permitir_http: bool,
+    permitir_privado: bool,
 ) -> R<Webhook> {
-    validar_destino(url, permitir_http).await?;
+    validar_destino(url, permitir_http, permitir_privado).await?;
 
-    let (quantos,): (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM webhooks WHERE jogador_id = ?1")
-            .bind(jogador_id)
-            .fetch_one(pool)
-            .await?;
+    let (quantos,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM webhooks WHERE jogador_id = ?1")
+        .bind(jogador_id)
+        .fetch_one(pool)
+        .await?;
     if quantos >= LIMITE_POR_JOGADOR {
         return Err(Falha::LimiteDeWebhooks);
     }
@@ -116,7 +116,12 @@ pub async fn registrar(
     .execute(pool)
     .await?;
 
-    Ok(Webhook { id, url: url.to_string(), criado_em, segredo: Some(segredo) })
+    Ok(Webhook {
+        id,
+        url: url.to_string(),
+        criado_em,
+        segredo: Some(segredo),
+    })
 }
 
 pub async fn listar(pool: &SqlitePool, jogador_id: &str) -> R<Vec<Webhook>> {
@@ -128,7 +133,12 @@ pub async fn listar(pool: &SqlitePool, jogador_id: &str) -> R<Vec<Webhook>> {
     .await?;
     Ok(linhas
         .into_iter()
-        .map(|(id, url, criado_em)| Webhook { id, url, criado_em, segredo: None })
+        .map(|(id, url, criado_em)| Webhook {
+            id,
+            url,
+            criado_em,
+            segredo: None,
+        })
         .collect())
 }
 
@@ -164,19 +174,18 @@ pub fn disparar(
             }
         };
         for jogador_id in jogadores {
-            let alvos: Vec<(String, String, String)> = match sqlx::query_as(
-                "SELECT id, url, segredo FROM webhooks WHERE jogador_id = ?1",
-            )
-            .bind(&jogador_id)
-            .fetch_all(&pool)
-            .await
-            {
-                Ok(a) => a,
-                Err(e) => {
-                    tracing::error!(erro = %e, "não consegui ler webhooks");
-                    continue;
-                }
-            };
+            let alvos: Vec<(String, String, String)> =
+                match sqlx::query_as("SELECT id, url, segredo FROM webhooks WHERE jogador_id = ?1")
+                    .bind(&jogador_id)
+                    .fetch_all(&pool)
+                    .await
+                {
+                    Ok(a) => a,
+                    Err(e) => {
+                        tracing::error!(erro = %e, "não consegui ler webhooks");
+                        continue;
+                    }
+                };
             for (id, url, segredo) in alvos {
                 entregar(&cliente, &id, &url, &segredo, evento, &corpo).await;
             }
@@ -188,7 +197,10 @@ pub fn assinar(segredo: &str, corpo: &[u8]) -> String {
     let mut mac = <Hmac<Sha256>>::new_from_slice(segredo.as_bytes())
         .expect("HMAC aceita chave de qualquer tamanho");
     mac.update(corpo);
-    format!("sha256={}", base16ct::lower::encode_string(&mac.finalize().into_bytes()))
+    format!(
+        "sha256={}",
+        base16ct::lower::encode_string(&mac.finalize().into_bytes())
+    )
 }
 
 async fn entregar(

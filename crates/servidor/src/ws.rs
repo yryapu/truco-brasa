@@ -92,7 +92,9 @@ async fn conduzir(
         entrou_na_mesa: entrou_tx,
     };
     let pronta = estado.enfileirar(chave, espera);
-    let faltam = modo.assentos().saturating_sub(estado.quantos_esperando(chave));
+    let faltam = modo
+        .assentos()
+        .saturating_sub(estado.quantos_esperando(chave));
     let _ = para_cliente.send(ParaCliente::Fila {
         modo: mesas::nome_do_modo(modo),
         aposta,
@@ -157,8 +159,6 @@ async fn conduzir(
     lendo.abort();
 }
 
-
-
 /// Devolve a aposta **se** este jogador ainda estava na fila. A condição importa: se a mesa
 /// já tinha levado a espera, a aposta está em jogo e devolver aqui seria criar moeda.
 async fn devolver_se_desistiu(
@@ -168,9 +168,9 @@ async fn devolver_se_desistiu(
     jogador_id: &str,
     aposta: i64,
 ) {
-    if estado.desistir(chave, id) {
-        if let Err(e) = bd::creditar(&estado.pool, jogador_id, aposta).await {
-            tracing::error!(erro = %e, "não consegui devolver a aposta de quem saiu da fila");
-        }
+    if estado.desistir(chave, id)
+        && let Err(e) = bd::creditar(&estado.pool, jogador_id, aposta).await
+    {
+        tracing::error!(erro = %e, "não consegui devolver a aposta de quem saiu da fila");
     }
 }

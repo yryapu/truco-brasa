@@ -30,8 +30,12 @@ pub fn hash_de_senha(senha: &str) -> anyhow::Result<String> {
 }
 
 pub fn senha_confere(senha: &str, hash: &str) -> bool {
-    let Ok(parsed) = PasswordHash::new(hash) else { return false };
-    Argon2::default().verify_password(senha.as_bytes(), &parsed).is_ok()
+    let Ok(parsed) = PasswordHash::new(hash) else {
+        return false;
+    };
+    Argon2::default()
+        .verify_password(senha.as_bytes(), &parsed)
+        .is_ok()
 }
 
 /// Token novo: 32 bytes do CSPRNG em hexadecimal. Volta `(token, hash do token)` — o token
@@ -93,9 +97,8 @@ pub fn token_do_cabecalho(headers: &HeaderMap) -> Option<String> {
 /// `Secure` só quando servido por HTTPS: num `http://127.0.0.1` de desenvolvimento, um cookie
 /// `Secure` simplesmente não é guardado pelo navegador, e o jogo não entraria.
 pub fn cookie_de_sessao(token: &str, seguro: bool) -> HeaderValue {
-    let mut v = format!(
-        "{COOKIE_SESSAO}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000"
-    );
+    let mut v =
+        format!("{COOKIE_SESSAO}={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=2592000");
     if seguro {
         v.push_str("; Secure");
     }
@@ -126,8 +129,9 @@ impl FromRequestParts<Estado> for Autenticado {
 
     async fn from_request_parts(parts: &mut Parts, estado: &Estado) -> Result<Self, Falha> {
         let token = token_do_cabecalho(&parts.headers).ok_or(Falha::NaoAutenticado)?;
-        let jogador =
-            jogador_da_sessao(&estado.pool, &token).await?.ok_or(Falha::NaoAutenticado)?;
+        let jogador = jogador_da_sessao(&estado.pool, &token)
+            .await?
+            .ok_or(Falha::NaoAutenticado)?;
         Ok(Autenticado(jogador))
     }
 }

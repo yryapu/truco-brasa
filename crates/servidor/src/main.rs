@@ -17,7 +17,20 @@ async fn main() -> anyhow::Result<()> {
     // no cookie e fecha o webhook em `http://`.
     let seguro = std::env::var("TRUCO_SEGURO").is_ok_and(|v| v == "1" || v == "true");
 
-    let config = Config { cookie_seguro: seguro, permitir_http_webhook: !seguro };
+    // A chave de destino local existe só para testar entrega de webhook na própria máquina.
+    // Junto de TRUCO_SEGURO=1 ela seria um SSRF aberto em produção, então isto recusa a
+    // combinação em vez de preferir uma das duas.
+    let webhook_local = std::env::var("TRUCO_WEBHOOK_LOCAL").is_ok_and(|v| v == "1");
+    if seguro && webhook_local {
+        anyhow::bail!(
+            "TRUCO_WEBHOOK_LOCAL=1 com TRUCO_SEGURO=1 abriria SSRF em produção; escolha um"
+        );
+    }
+    let config = Config {
+        cookie_seguro: seguro,
+        permitir_http_webhook: !seguro,
+        permitir_destino_privado: webhook_local,
+    };
     let app = truco_servidor::montar(&banco, config).await?;
 
     let escuta = tokio::net::TcpListener::bind(&endereco).await?;

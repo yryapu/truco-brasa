@@ -21,7 +21,10 @@ pub struct Emblema {
     pub icone: &'static str,
 }
 
-const TODOS: &[(Emblema, fn(&Jogador) -> bool)] = &[
+/// O critério de um emblema: uma pergunta sobre a estatística do jogador.
+type Criterio = fn(&Jogador) -> bool;
+
+const TODOS: &[(Emblema, Criterio)] = &[
     (
         Emblema {
             chave: "estreante",
@@ -79,5 +82,9 @@ const TODOS: &[(Emblema, fn(&Jogador) -> bool)] = &[
 ];
 
 pub fn de(j: &Jogador) -> Vec<Emblema> {
-    TODOS.iter().filter(|(_, criterio)| criterio(j)).map(|(e, _)| e.clone()).collect()
+    TODOS
+        .iter()
+        .filter(|(_, criterio)| criterio(j))
+        .map(|(e, _)| e.clone())
+        .collect()
 }

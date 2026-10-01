@@ -16,6 +16,12 @@ pub struct Config {
     pub cookie_seguro: bool,
     /// Permite registrar webhook `http://`. Só para desenvolvimento e teste (ADR-004).
     pub permitir_http_webhook: bool,
+    /// **Desliga a guarda de destino** e deixa o webhook apontar para endereço privado ou
+    /// de laço. Existe por um motivo só: sem isso não há como testar entrega de webhook
+    /// localmente, porque o receptor de teste mora em `127.0.0.1`. Padrão `false` mesmo em
+    /// desenvolvimento, e só liga por `TRUCO_WEBHOOK_LOCAL=1` — nunca junto de
+    /// `TRUCO_SEGURO=1`, e o `main` recusa a combinação.
+    pub permitir_destino_privado: bool,
 }
 
 /// Um jogador esperando mesa.
@@ -47,7 +53,12 @@ impl Estado {
             .user_agent("truco-brasa/0.1")
             .build()
             .expect("cliente HTTP com configuração constante");
-        Estado { pool, cliente, config, fila: Arc::new(Mutex::new(HashMap::new())) }
+        Estado {
+            pool,
+            cliente,
+            config,
+            fila: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     /// Põe na fila. Se completou mesa, devolve os jogadores dela — e **tira todos da fila**
@@ -65,14 +76,20 @@ impl Estado {
     }
 
     pub fn quantos_esperando(&self, chave: Chave) -> usize {
-        self.fila.lock().expect("fila envenenada").get(&chave).map_or(0, Vec::len)
+        self.fila
+            .lock()
+            .expect("fila envenenada")
+            .get(&chave)
+            .map_or(0, Vec::len)
     }
 
     /// Sai da fila sem ter jogado — o jogador fechou a aba enquanto esperava.
     /// Devolve `true` se ainda estava lá (e portanto é quem deve ser reembolsado).
     pub fn desistir(&self, chave: Chave, id: uuid::Uuid) -> bool {
         let mut fila = self.fila.lock().expect("fila envenenada");
-        let Some(banco) = fila.get_mut(&chave) else { return false };
+        let Some(banco) = fila.get_mut(&chave) else {
+            return false;
+        };
         match banco.iter().position(|e| e.id == id) {
             Some(i) => {
                 banco.remove(i);

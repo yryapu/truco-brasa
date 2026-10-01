@@ -28,7 +28,10 @@ pub fn roteador(estado: Estado) -> Router {
         .route("/api/sair", post(api::sair))
         .route("/api/eu", get(api::eu))
         .route("/api/ranking", get(api::ranking))
-        .route("/api/webhooks", post(api::registrar_webhook).get(api::listar_webhooks))
+        .route(
+            "/api/webhooks",
+            post(api::registrar_webhook).get(api::listar_webhooks),
+        )
         // axum 0.8 usa `{id}`, não `:id`.
         .route("/api/webhooks/{id}", delete(api::remover_webhook))
         .route("/ws", get(ws::entrar))

@@ -21,7 +21,10 @@ pub async fn abrir(url: &str) -> Result<SqlitePool> {
         .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
         .busy_timeout(std::time::Duration::from_secs(5))
         .foreign_keys(true);
-    let pool = SqlitePoolOptions::new().max_connections(8).connect_with(opcoes).await?;
+    let pool = SqlitePoolOptions::new()
+        .max_connections(8)
+        .connect_with(opcoes)
+        .await?;
     criar_tabelas(&pool).await?;
     Ok(pool)
 }
@@ -125,7 +128,9 @@ pub async fn criar_jogador(
     .bind(agora())
     .execute(pool)
     .await?;
-    por_id(pool, &id).await.map(|o| o.expect("acabou de ser inserido"))
+    por_id(pool, &id)
+        .await
+        .map(|o| o.expect("acabou de ser inserido"))
 }
 
 pub async fn por_id(pool: &SqlitePool, id: &str) -> Result<Option<Jogador>, sqlx::Error> {
@@ -149,10 +154,10 @@ pub async fn por_apelido(
                 senha_hash
          FROM jogadores WHERE apelido = ?1 COLLATE NOCASE",
     )
-        .bind(apelido)
-        .fetch_optional(pool)
-        .await?
-        .map(|l| (Jogador::da_linha(&l), l.get("senha_hash"))))
+    .bind(apelido)
+    .fetch_optional(pool)
+    .await?
+    .map(|l| (Jogador::da_linha(&l), l.get("senha_hash"))))
 }
 
 pub async fn ranking(pool: &SqlitePool, teto: i64) -> Result<Vec<Jogador>, sqlx::Error> {

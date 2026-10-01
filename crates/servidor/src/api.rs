@@ -28,7 +28,10 @@ pub struct Ficha {
 impl From<Jogador> for Ficha {
     fn from(j: Jogador) -> Ficha {
         let emblemas = emblemas::de(&j);
-        Ficha { jogador: j, emblemas }
+        Ficha {
+            jogador: j,
+            emblemas,
+        }
     }
 }
 
@@ -62,7 +65,10 @@ pub async fn registrar(
     };
     // Registrar já entra: não existe "cadastrou, agora faça login" (ADR-002).
     let token = auth::criar_sessao(&estado.pool, &jogador.id).await?;
-    Ok((auth::com_cookie(&token, estado.config.cookie_seguro), Json(Ficha::from(jogador))))
+    Ok((
+        auth::com_cookie(&token, estado.config.cookie_seguro),
+        Json(Ficha::from(jogador)),
+    ))
 }
 
 pub async fn entrar(
@@ -76,7 +82,10 @@ pub async fn entrar(
         return Err(Falha::CredenciaisInvalidas);
     }
     let token = auth::criar_sessao(&estado.pool, &jogador.id).await?;
-    Ok((auth::com_cookie(&token, estado.config.cookie_seguro), Json(Ficha::from(jogador))))
+    Ok((
+        auth::com_cookie(&token, estado.config.cookie_seguro),
+        Json(Ficha::from(jogador)),
+    ))
 }
 
 pub async fn sair(State(estado): State<Estado>, headers: HeaderMap) -> R<impl IntoResponse> {
@@ -84,7 +93,10 @@ pub async fn sair(State(estado): State<Estado>, headers: HeaderMap) -> R<impl In
         auth::encerrar_sessao(&estado.pool, &token).await?;
     }
     let mut h = HeaderMap::new();
-    h.insert(SET_COOKIE, auth::cookie_apagado(estado.config.cookie_seguro));
+    h.insert(
+        SET_COOKIE,
+        auth::cookie_apagado(estado.config.cookie_seguro),
+    );
     Ok((StatusCode::NO_CONTENT, h))
 }
 
@@ -139,6 +151,7 @@ pub async fn registrar_webhook(
         &jogador.id,
         n.url.trim(),
         estado.config.permitir_http_webhook,
+        estado.config.permitir_destino_privado,
     )
     .await?;
     Ok(Json(w))
