@@ -1,0 +1,230 @@
+{
+  "projeto": "truco",
+  "repos": {
+    "pesquisa": "https://github.com/yryapu/poliorketikos-truco-brasa",
+    "operacional": "https://github.com/yryapu/truco-brasa"
+  },
+  "commit_final": "1f774c2dbdd61ee9961dc9b0386994d255d633ad",
+  "nota_sobre_commit_final": "É o commit que este arquivo descreve — o estado provado por todos os comandos abaixo. O commit que acrescenta este arquivo é necessariamente posterior a ele, e contém só ele.",
+  "como_rodar": [
+    "docker compose up --build    # http://127.0.0.1:8080",
+    "cargo test --all             # 50 testes em Rust",
+    "docker compose -f compose.teste.yaml up --build --abort-on-container-exit --exit-code-from front    # 4 testes de interface"
+  ],
+  "criterios": [
+    {
+      "id": "C1",
+      "texto": "as regras do truco paulista estão certas, e cada uma tem fonte citável",
+      "atendido": true,
+      "prova": "cargo test --all → tests/cartas.rs 14 passed; tests/partida.rs 26 passed. Cada teste nomeia a etiqueta da regra (r02_a_dama_eh_mais_fraca_que_o_valete, r11_tabela_de_empate_caso_a_caso, r18_quem_corre_entrega_o_valor_anterior_ao_pedido…), e cada etiqueta R-01..R-31 está em poliorketikos-truco-brasa/regras/truco-paulista.md com a citação da fonte. As quatro fontes estão salvas íntegras em fontes/, com sha256 e o comando que as obteve.",
+      "refuta": "achar uma regra implementada cuja etiqueta não exista na especificação, ou uma etiqueta cuja citação não sustente o que o código faz. Mutei R-18 (pontos = valor_proposto em vez de self.mao.valor) e dois testes ficaram vermelhos; mutei R-19 (removi a checagem de pedido seguido) e um ficou vermelho."
+    },
+    {
+      "id": "C2",
+      "texto": "jogável 1x1, partida completa até 12 pontos",
+      "atendido": true,
+      "prova": "cargo test --test fluxo → uma_partida_1x1_inteira_do_cadastro_ao_pagamento: ok. Assere placar com alguém ≥ 12 e as duas pontas concordando sobre vencedor e placar. E pela interface: Playwright '1x1: dois navegadores se encontram, jogam até 12, e o saldo fecha' ✓ (7.3s).",
+      "refuta": "rodar a partida e ver o placar fechar com menos de 12, ou as duas pontas discordarem do vencedor."
+    },
+    {
+      "id": "C3",
+      "texto": "jogável 2x2 (duplas), com parceiro à frente",
+      "atendido": true,
+      "prova": "cargo test --test fluxo → uma_partida_2x2_inteira_com_quatro_jogadores: ok. Quatro clientes WebSocket, os quatro concordando sobre vencedor e placar, soma de saldos conservada em 4000.",
+      "refuta": "montar a mesa 2x2 e verificar que equipe_de(assento) não põe o parceiro em assento+2; ou a partida não fechar com quatro jogadores."
+    },
+    {
+      "id": "C4",
+      "texto": "cadastro rápido: o jogador entra e começa a jogar em menos de um minuto",
+      "atendido": true,
+      "prova": "Playwright 'do primeiro clique à mesa em menos de um minuto' ✓ → [medida] cadastro de dois jogadores: 324 ms · até a carta na mão: 531 ms. Dois campos (apelido, senha), sem e-mail, sem confirmação, e o registro já devolve a sessão: POST /api/registrar responde 200 com Set-Cookie e a ficha com 1000 moedas.",
+      "refuta": "cronometrar com uma pessoa de verdade digitando. Os 531 ms são a contribuição do SISTEMA; o tempo de digitar não está incluído e não é meu para medir. Se o critério for lido como 'incluindo a pessoa', ele passa a depender de quem digita e esta prova não o cobre."
+    },
+    {
+      "id": "C5",
+      "texto": "sessão segura, com os dados de cada jogador isolados dos outros",
+      "atendido": true,
+      "prova": "cargo test --all → um_assento_nunca_recebe_a_carta_do_outro, a_visao_so_contem_as_cartas_que_aquele_assento_tem_direito_de_ver, visao_nunca_vaza_carta_de_outro_assento, o_webhook_de_um_jogador_nao_eh_visivel_nem_removivel_por_outro: todos ok. Sessão = token de 32 bytes do CSPRNG em cookie HttpOnly+SameSite=Strict, com SHA-256 do token no banco. Nenhuma rota aceita jogador_id do cliente: o extrator Autenticado é o único caminho. Verificado por curl: GET /api/eu sem cookie → 401 {\"erro\":\"nao_autenticado\"}. WebSocket sem cookie → upgrade recusado (teste nao_se_aposta_mais_do_que_se_tem_e_a_desistencia_devolve). Cliente sem nenhum innerHTML (grep): apelido com HTML dentro não executa.",
+      "refuta": "o teste de lista BRANCA é o que vale: varrer a visão serializada de um assento e achar QUALQUER glifo de carta fora de {mão dele} ∪ {vira} ∪ {cartas abertas}. Revertendo o indicador de manilha para a carta de paus, ele falha de forma determinística — foi assim que o defeito foi achado e assim que se prova que o teste serve."
+    },
+    {
+      "id": "C6",
+      "texto": "saldo interno: 1000 moedas iniciais, aposta à escolha, e o saldo é só do jogo",
+      "atendido": true,
+      "prova": "cargo test --test fluxo → uma_partida_1x1…: assere moedas == 1000 no registro, 900 após entrar na fila com aposta 100, e [900, 1100] no fim, com soma 2000 ('o jogo não cria nem destrói moeda'). oito_abas_apostando_tudo_ao_mesmo_tempo_nao_deixam_o_saldo_negativo: ok — oito conexões simultâneas apostando 1000 cada, exatamente uma cobrada, saldo 0. Removendo o 'AND moedas >= ?2' do UPDATE, esse teste falha com saldo −5000.",
+      "refuta": "esse mesmo teste. Ele existe porque eu apaguei a guarda do UPDATE e NENHUM teste ficou vermelho — a conferência em ws::entrar escondia a falta dela."
+    },
+    {
+      "id": "C7",
+      "texto": "ranking, e emblemas de reputação por vitórias e por histórico",
+      "atendido": true,
+      "prova": "cargo test --test fluxo → uma_partida_1x1…: assere que o emblema 'estreante' sai e 'batismo' entra para quem ganhou, que partidas == 1, e que GET /api/ranking é público e NÃO expõe o id interno de ninguém. Playwright 'o saguão mostra emblema, ranking e webhook' ✓ assere 'Estreante' na tela. Seis emblemas, derivados da estatística na leitura (emblemas.rs), nunca guardados.",
+      "refuta": "mudar o critério de um emblema e ver se alguma tabela continua afirmando o antigo — não continua, porque emblema é função e não registro. E: o ranking ordena por vitórias e depois moedas; se alguém mostrar que a ordem desejada é outra, o item cai."
+    },
+    {
+      "id": "C8",
+      "texto": "webhooks: registra URL e recebe eventos de partida (começou, terminou, resultado)",
+      "atendido": true,
+      "prova": "cargo test --test webhook → 3 passed. o_webhook_chega_assinado_nos_dois_eventos_da_partida: receptor axum real recebe partida.comecou e partida.terminou, e o teste RECALCULA o HMAC-SHA256 do corpo exato com o segredo que o registro devolveu e compara — e também assere que um segredo errado NÃO confere, senão a verificação não provaria nada. O 'resultado' do enunciado é o corpo de partida.terminou (equipe_vencedora, placar, vencedores, perdedores, moedas_por_vencedor), não um terceiro evento. a_guarda_de_destino_recusa_a_propria_rede: dez URLs recusadas (loopback, localhost, 169.254.169.254, ::1, as três faixas privadas, ftp, file, texto solto).",
+      "refuta": "apontar um webhook para um endereço público que você controla e verificar a assinatura com: printf '%s' \"$CORPO\" | openssl dgst -sha256 -hmac \"$SEGREDO\" -hex. Se não casar, o item cai."
+    },
+    {
+      "id": "C9",
+      "texto": "comunicação em tempo real por WebSocket, com a carta como o próprio caractere Unicode",
+      "atendido": true,
+      "prova": "cargo test --all → no_json_a_carta_eh_o_caractere_e_nada_mais: serde_json::to_string(ás de paus) == \"\\\"🃑\\\"\", e \"As de paus\" e \"🂬\" (KNIGHT) são recusados na volta. unicode_bate_com_o_exemplo_do_enunciado: os quatro ases do enunciado são U+1F0A1/B1/C1/D1. unicode_ida_e_volta_nas_quarenta: todas as 40. No fluxo real, jogar_ate_o_fim valida que cada item de minhas_cartas é UM caractere e é carta do baralho de 40. Playwright confere o glifo na tela com ehCartaDoTruco().",
+      "refuta": "abrir a aba Network do navegador numa partida e achar no quadro do WebSocket qualquer carta que não seja um único caractere do bloco Playing Cards."
+    },
+    {
+      "id": "C10",
+      "texto": "roda e foi testado localmente, em Docker, de forma segura",
+      "atendido": true,
+      "prova": "docker build → exit 0; imagem 179 MB; docker exec id → uid=10001(truco), não-root; docker inspect --format '{{.State.Health.Status}}' → healthy; /saude → 200; POST /api/registrar no container → jogador com 1000 moedas. docker compose -f compose.teste.yaml up --abort-on-container-exit --exit-code-from front → EXIT=0, 4 passed. compose.yaml: publica só em 127.0.0.1, read_only, cap_drop ALL, no-new-privileges, banco em volume. O HEALTHCHECK é o próprio binário (truco --saude), e conferi o caso NEGATIVO: porta morta → exit 1.",
+      "refuta": "rodar com a porta publicada em 0.0.0.0 sem TLS — aí o cookie de sessão trafega em claro na rede local, e é por isso que o compose não faz isso. E: o healthcheck que sempre diz ok é pior que nenhum; o caso negativo está conferido acima."
+    }
+  ],
+  "decisoes": [
+    {
+      "o_que": "axum + tokio + sqlx/SQLite, com o motor de regras num crate puro sem tokio, sem sqlx e sem axum",
+      "porque": "O serviço é I/O-bound com estado em processo: WebSocket de primeira classe no mesmo roteador do HTTP faz o upgrade herdar o cookie sem ponte nenhuma, e SQLite dá ACID e durabilidade para o saldo sem um segundo processo. O crate de regras isolado de I/O roda em milissegundos e mantém o ADR-003 (WASM) reversível por 20 linhas em vez de por um refactor.",
+      "alternativa_descartada": "actix-web (o modelo de ator duplicaria o meu próprio modelo de mesa, e paga unsafe que eu não quero auditar) e Postgres (compra concorrência de escrita e replicação que esta v1 não exerce, e custa um container, uma rede e uma senha)."
+    },
+    {
+      "o_que": "NÃO usar WASM no cliente",
+      "porque": "A promessa real do WASM aqui era 'uma regra, um código'. Mas num jogo de informação oculta valendo saldo o servidor tem de ser autoritativo de todo modo, então o WASM não substituiria a execução da regra: duplicaria. E duplicar é ativamente perigoso — para o cliente avaliar quem ganha ele precisa do modelo de baralho, e o cliente que não sabe as regras é o cliente que não pode vazar a mão do adversário. O que o cliente faz de verdade é DOM, clique e onmessage, e nada disso é limitado por CPU.",
+      "alternativa_descartada": "wasm-pack/trunk + wasm-bindgen com o crate de regras compilado para wasm32. Hoje o cliente é um arquivo HTML sem passo de build, embutido no binário."
+    },
+    {
+      "o_que": "cookie opaco com tabela de sessões, em vez de JWT",
+      "porque": "Um JWT não se revoga: para expulsar uma sessão preciso de uma lista de revogação, que é uma tabela de sessões — exatamente o que o cookie opaco já dá, sem assinatura, sem chave para rodar, sem clock skew e sem a superfície de alg:none. JWT compra validação sem ir ao banco, e eu vou ao banco de todo jeito para carregar o saldo.",
+      "alternativa_descartada": "JWT assinado; e 'só anônimo', que seria ainda mais rápido mas impede ranking e emblemas por histórico, porque sem identidade que sobreviva ao fechar o navegador não existe histórico."
+    },
+    {
+      "o_que": "pareamento exige modo E aposta iguais; o bolo é n × aposta e vai inteiro para os vencedores",
+      "porque": "'Aposta quanto quiser' não diz qual é a aposta da mesa quando um quer 500 e outro 10. Exigir igualdade resolve por construção, e mantém a soma dos saldos da mesa invariante (testado).",
+      "alternativa_descartada": "usar a menor aposta da mesa — pareia qualquer um com qualquer um, mas transforma a escolha da aposta em mentira e cria incentivo a entrar alto só para parear rápido. E negociar a aposta na mesa, que precisa de fase, temporizador e tela antes da primeira carta."
+    },
+    {
+      "o_que": "só quem está na vez responde ao truco, e há prazo de 60 s por ação",
+      "porque": "A fonte diz 'qualquer um da dupla responde e vale a primeira resposta' — isso num servidor é uma corrida entre dois WebSockets, resolvida pela latência de cada jogador, e o jogador perde a mão por causa do provedor dele. E 'o jogador para' é diferente de 'o jogador cai': queda fecha o socket, parado não fecha nada, e sem prazo a mesa ficava de pé para sempre com a aposta do adversário presa.",
+      "alternativa_descartada": "reproduzir fielmente 'vale a primeira resposta' aceitando as duas e ordenando por chegada. Se vier a ser necessário, o desenho é um prazo curto em que a resposta de MAIOR compromisso vence (retrucar > aceitar > correr), que é determinístico e não depende de ping."
+    },
+    {
+      "o_que": "a manilha vai no protocolo como o NÚMERO ('4', 'Q'), não como uma carta",
+      "porque": "Mandar o caractere da carta daquele número em paus mentia duas vezes: sugeria que o zap estava na mesa, e quando um jogador tinha justamente aquela carta de paus, o glifo na tela de TODOS ficava idêntico à carta dele. O número é exatamente o que a regra torna público.",
+      "alternativa_descartada": "manter o caractere da carta de paus como indicador. Achado pelo teste de interface, não pelos testes de regra — e o conserto do método foi reescrever o invariante de isolamento como lista branca em vez de lista negra."
+    },
+    {
+      "o_que": "Playwright, dentro de container",
+      "porque": "O que precisa ser provado é que DOIS navegadores independentes se encontram numa mesa: browser.newContext() dá duas sessões com cookies separados no mesmo processo, e a espera é por condição em vez de por tempo, que num jogo assíncrono é a diferença entre teste e teste intermitente. Em container porque o node desta máquina está quebrado (libllhttp pendurada do Homebrew) e consertar a instalação de quem avalia é efeito colateral que ninguém pediu.",
+      "alternativa_descartada": "jsdom + Vitest (sem WebSocket real nem layout: eu testaria o meu próprio mock, e para um cliente cuja função é desenhar o que o servidor manda isso prova zero), Selenium (espera por tempo) e Cypress (um navegador por execução)."
+    }
+  ],
+  "previsoes": [
+    {
+      "claim": "As quatro fontes concordam na ordem das cartas e na tabela de empate, e discordam em pelo menos um ponto de pontuação",
+      "p": 0.8,
+      "resultado": true
+    },
+    {
+      "claim": "O primeiro cargo build falha por mudança de API nas versões novas, não por erro meu de lógica",
+      "p": 0.75,
+      "resultado": true
+    },
+    {
+      "claim": "O fluxo completo 1x1 por WebSocket funciona na primeira tentativa, sem mudar código",
+      "p": 0.35,
+      "resultado": true
+    },
+    {
+      "claim": "docker build passa de primeira e o container responde",
+      "p": 0.55,
+      "resultado": true
+    },
+    {
+      "claim": "A janela de DNS rebinding na guarda de destino do webhook é atravessável por um atacante que controla o DNS do host registrado",
+      "p": 0.9,
+      "resultado": null
+    }
+  ],
+  "nota_sobre_previsoes": "Três das quatro fechadas saíram melhor do que eu esperava, duas por margem larga. Isso é subconfiança sistemática, que é defeito de calibração igual ao excesso. O mecanismo que eu consigo nomear está na previsão de 0,35: contei o risco das APIs novas duas vezes, uma no build (onde ele de fato apareceu) e outra no comportamento, onde já tinha sido pago. A quinta está aberta de propósito: eu não a fechei porque não tratei o risco, e fechá-la exigiria atacar o próprio serviço.",
+  "multiagente": {
+    "usou": true,
+    "porque": "Um subagente, para o cliente web — a única parte inteiramente determinada pelo protocolo e que não compartilha código com o servidor. Fixei o PROTOCOLO.md primeiro, justamente para poder construir servidor e cliente em paralelo. NÃO deleguei o motor de regras, de propósito: é a parte cuja correção invalida todo o resto, e delegar significaria não poder responder por que cada regra cita a fonte que cita.",
+    "custo": "63.055 tokens, 89,5 s de parede, 3 chamadas de ferramenta, 469 linhas de HTML+CSS+JS num arquivo (medido pela notificação de término do subagente e por wc -l).",
+    "valeu": true,
+    "valeu_porque": "Dois ganhos, e o segundo eu não esperava. (1) O cliente saiu funcionando: os 4 testes de Playwright passam contra ele, e eu só mudei duas linhas suas em toda a sessão (o indicador de manilha, por causa de um defeito MEU de protocolo). (2) Ele achou uma contradição no meu próprio PROTOCOLO.md — a tabela de rótulos dizia valor_proposto 3 = TRUCO e o meu exemplo narrava 'pediu SEIS' para valor_proposto 3 — e escolheu a tabela, que era a certa, em vez de escolher em silêncio. Um leitor independente do contrato pegou o que o autor do contrato não pegou. O custo é desprezível perto de escrever 469 linhas de interface à mão.",
+    "o_que_eu_faria_diferente": "Teria pedido que ele rodasse ao menos um `node --check` no JS — ele avisou honestamente que o script nunca foi sequer checado por sintaxe, e eu só descobri que estava íntegro quando o Playwright passou, meia hora depois."
+  },
+  "riscos_conhecidos": [
+    {
+      "cenario": "um integrador registra um webhook em https://dele.exemplo que resolve para um IP público na minha validação e, segundos depois, para 127.0.0.1 na resolução do reqwest",
+      "efeito": "a entrega sai contra a minha própria rede; é SSRF por janela de tempo (TOCTOU / DNS rebinding)",
+      "paga": "quem hospeda o servidor, não o jogador",
+      "porque_nao_tratei": "fechar exige conectar ao IP já validado e passar o Host à mão, o que reescreve o caminho de saída do reqwest. Está declarado, com p = 0,9 de ser atravessável. Uma revisão de segurança automática do ambiente apontou este mesmo item de forma independente — confirmação, não novidade."
+    },
+    {
+      "cenario": "uma pessoa cria duas contas, joga 1x1 contra si mesma com aposta 0, e repete",
+      "efeito": "farma vitórias, sequência e emblemas; o ranking passa a medir paciência em vez de jogo. Com aposta 0 nenhuma moeda se move, então o saldo não é afetado — a reputação é",
+      "paga": "todo jogador honesto do ranking",
+      "porque_nao_tratei": "não há limite de taxa no registro nem detecção de auto-jogo. O conserto barato é não contar partida em que dois assentos vêm do mesmo IP ou da mesma sessão, e isso tem falso positivo imediato (duas pessoas na mesma casa). Precisa de desenho, não de remendo."
+    },
+    {
+      "cenario": "num 2x2, o parceiro da Ana fecha a aba na terceira mão",
+      "efeito": "a dupla inteira perde por abandono, e a Ana perde a aposta sem ter feito nada",
+      "paga": "o parceiro de quem saiu, que não escolheu nada",
+      "porque_nao_tratei": "a alternativa é esperar reconexão, que precisa de temporizador, de reentrada na mesa e de um estado 'pausada' que o cliente saiba desenhar. É outra onda de trabalho, não uma linha."
+    },
+    {
+      "cenario": "um jogador cai por queda de rede no meio da partida e volta dez segundos depois",
+      "efeito": "não há reentrada: a partida já foi encerrada como abandono e ele perdeu a aposta",
+      "paga": "o jogador com internet ruim",
+      "porque_nao_tratei": "reentrada exige que a mesa sobreviva ao socket e que haja um prazo de carência; é o mesmo trabalho do risco anterior."
+    },
+    {
+      "cenario": "alguém esquece a senha",
+      "efeito": "perde a conta, o saldo e os emblemas, definitivamente",
+      "paga": "o jogador",
+      "porque_nao_tratei": "cadastro sem e-mail foi decisão explícita (ADR-002) para economizar o minuto que o enunciado pede. O conserto é e-mail OPCIONAL, para não reintroduzir o atrito em quem não quer."
+    },
+    {
+      "cenario": "o arquivo truco.db é lido por quem tem acesso ao disco do servidor",
+      "efeito": "os segredos dos webhooks estão em claro ali. Senhas (Argon2id) e tokens de sessão (SHA-256) não estão",
+      "paga": "o integrador, cujas entregas passam a poder ser falsificadas",
+      "porque_nao_tratei": "o segredo precisa estar recuperável para assinar cada entrega, então guardar só o hash não serve. O conserto real é cifrar em repouso com uma chave fora do banco, o que introduz gestão de chave — camada que esta v1 não paga."
+    },
+    {
+      "cenario": "alguém tenta mil senhas contra POST /api/entrar",
+      "efeito": "nada no servidor impede. O Argon2id torna cada tentativa caro (para o atacante e para o meu CPU), mas não há limite de taxa nem bloqueio após N falhas — e o custo de CPU é, ele mesmo, um vetor de negação de serviço",
+      "paga": "o jogador com senha fraca, e quem paga o servidor",
+      "porque_nao_tratei": "limite de taxa pede uma decisão sobre chave (IP? conta? as duas?) e sobre o que fazer atrás de proxy. Não cabia sem desenho."
+    },
+    {
+      "cenario": "o servidor é publicado em 0.0.0.0 sem um proxy TLS na frente",
+      "efeito": "o cookie de sessão trafega em claro; qualquer um na mesma rede assume a sessão",
+      "paga": "todo jogador",
+      "porque_nao_tratei": "a v1 não termina TLS. O compose publica só em 127.0.0.1 justamente para que o padrão não seja o inseguro, e TRUCO_SEGURO=1 existe para quem põe o proxy. Mas nada no código IMPEDE a publicação errada."
+    },
+    {
+      "cenario": "muitas partidas terminando ao mesmo tempo",
+      "efeito": "SQLite serializa escrita; as liquidações de fim de partida entram em fila e o busy_timeout de 5 s pode estourar",
+      "paga": "o jogador cuja partida termina no pico",
+      "porque_nao_tratei": "não medi onde está o teto — não fiz teste de carga, e por isso não sei o número. Dizer 'suporta X' sem medir seria inventar. O gate de reversão é Postgres, e sqlx mantém o mesmo código de consulta."
+    },
+    {
+      "cenario": "nada disto foi lido por outra pessoa",
+      "efeito": "toda a revisão foi minha, inclusive a dos meus próprios testes. O exemplo concreto: eu apaguei a guarda de saldo do UPDATE e nenhum teste ficou vermelho — e eu só descobri porque a skill me obrigou a tentar. Pode haver outras guardas na mesma situação que eu não pensei em mutar",
+      "paga": "quem confiar nesta entrega sem revisar",
+      "porque_nao_tratei": "o enunciado é de uma sessão autônoma, sem revisor. Mutei três propriedades e duas sobreviveram à primeira tentativa (uma por erro meu de aplicação da mutação). Uma suíte de mutação de verdade (cargo-mutants) é o próximo passo honesto."
+    }
+  ],
+  "tempo_minutos": 55,
+  "nota_sobre_tempo": "Medido da primeira previsão registrada (2026-10-01T07:26:25Z, que é também quando a primeira fonte foi salva) até a escrita deste arquivo, por `date -u`. Os poucos minutos anteriores — conferir gh, cargo, docker e consultar o reino — não estão incluídos.",
+  "numeros": {
+    "testes_rust": 50,
+    "testes_de_interface": 4,
+    "comando_que_conta": "cargo test 2>&1 | grep -E 'test result: ok' | awk '{s+=$4} END {print s}'  →  50 ; e o relatório do Playwright: '4 passed'",
+    "detalhe": "tests/cartas.rs 14 · tests/partida.rs 26 · tests/fluxo.rs 7 · tests/webhook.rs 3",
+    "portoes": "cargo fmt --all --check: ok · cargo clippy --all-targets --all-features -- -D warnings: 0 achados · docker compose -f compose.teste.yaml … --exit-code-from front: EXIT=0"
+  }
+}

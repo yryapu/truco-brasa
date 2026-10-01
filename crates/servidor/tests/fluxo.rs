@@ -6,7 +6,7 @@
 //! temporário — não `sqlite::memory:`, porque com um *pool* cada conexão em memória é um
 //! banco diferente e o teste passaria por acidente.
 
-use serde_json::Value;
+use serde_json::{Value, json};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
 
@@ -320,4 +320,112 @@ async fn oito_abas_apostando_tudo_ao_mesmo_tempo_nao_deixam_o_saldo_negativo() {
     );
     assert_eq!(saldo, 0, "exatamente uma aposta de 1000 foi cobrada");
     drop(abertas);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn pedir_truco_e_correr_pelo_protocolo() {
+    // O jogador automático dos outros testes aceita truco mas nunca **pede** — então o
+    // caminho pedir → responder nunca era exercitado pelo WebSocket, só pelos testes de
+    // regra. Esta é a lacuna que este teste fecha.
+    let (endereco, _dir) = comum::servidor(false).await;
+    let ana = Cliente::registrar(endereco, "ana").await;
+    let bia = Cliente::registrar(endereco, "bia").await;
+    let mut s1 = ana.conectar("1x1", 0).await;
+    let mut s2 = bia.conectar("1x1", 0).await;
+
+    /// Lê até o primeiro `estado` e devolve-o.
+    async fn estado(s: &mut comum::Socket) -> Value {
+        loop {
+            let m = proxima(s).await;
+            if m["t"] == "estado" {
+                return m;
+            }
+        }
+    }
+
+    let e1 = estado(&mut s1).await;
+    let e2 = estado(&mut s2).await;
+    // Quem puxa a mão 0 é o assento 0; a outra ponta não pode agir.
+    let (de_quem_eh_a_vez, de_quem_nao_eh) = if e1["vez"] == e1["assento"] {
+        (&mut s1, &mut s2)
+    } else {
+        (&mut s2, &mut s1)
+    };
+    let (dono, outro) = if e1["vez"] == e1["assento"] {
+        (e1, e2)
+    } else {
+        (e2, e1)
+    };
+    assert_eq!(dono["valor"], 1, "a mão começa valendo 1 (R-15)");
+    assert!(
+        dono["acoes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a == "pedir"),
+        "quem está na vez pode pedir truco"
+    );
+    assert!(
+        outro["acoes"].as_array().unwrap().is_empty(),
+        "quem não está na vez não tem ação: {outro:?}"
+    );
+
+    // Quem não está na vez tentando pedir recebe erro — e só ele recebe.
+    comum::manda(de_quem_nao_eh, json!({"t":"pedir"})).await;
+    let erro = loop {
+        let m = proxima(de_quem_nao_eh).await;
+        if m["t"] == "erro" {
+            break m;
+        }
+    };
+    assert_eq!(
+        erro["erro"], "nao_eh_sua_vez",
+        "R-16: só se pede na própria vez"
+    );
+
+    // Agora o pedido legítimo.
+    comum::manda(de_quem_eh_a_vez, json!({"t":"pedir"})).await;
+    let depois = estado(de_quem_nao_eh).await;
+    let p = &depois["pendencia"];
+    assert_eq!(p["valor_proposto"], 3, "truco propõe 3 (R-15)");
+    assert_eq!(
+        p["assento_respondente"], depois["assento"],
+        "ADR-005: um respondente só"
+    );
+    let acoes: Vec<&str> = depois["acoes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+    assert_eq!(
+        acoes,
+        ["aceitar", "correr", "aumentar"],
+        "as três respostas (R-17)"
+    );
+
+    // Corre: quem pediu leva 1, que é o valor de antes do pedido (R-18).
+    comum::manda(de_quem_nao_eh, json!({"t":"correr"})).await;
+    // Drena até o estado da mão **seguinte**: quem pediu ainda tinha na fila o estado
+    // difundido no momento do pedido, e ler o primeiro `estado` pegaria aquele. Foi o que
+    // esta asserção pegou na primeira execução.
+    let novo = loop {
+        let m = estado(de_quem_eh_a_vez).await;
+        if m["numero_da_mao"] == 1 {
+            break m;
+        }
+    };
+    let placar: Vec<i64> = novo["placar"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_i64().unwrap())
+        .collect();
+    assert_eq!(
+        placar.iter().sum::<i64>(),
+        1,
+        "R-18: correr de um truco vale 1, placar {placar:?}"
+    );
+    assert_eq!(novo["valor"], 1, "R-21: a mão seguinte volta a valer 1");
+    assert_eq!(novo["numero_da_mao"], 1, "a mão seguinte começou");
 }

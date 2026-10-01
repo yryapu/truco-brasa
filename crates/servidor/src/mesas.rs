@@ -257,7 +257,9 @@ async fn rodar(
             }
         }
     }
-    Ok(())
+    // Sem `Ok(())` aqui: todo caminho do laço devolve, inclusive o canal fechado. O clippy
+    // apontou a expressão inalcançável, e tirá-la é melhor que silenciá-la — ela dizia que
+    // existia uma saída da mesa sem liquidação, e não existe.
 }
 
 /// Quem está devendo uma ação agora. É de quem o relógio corre.
