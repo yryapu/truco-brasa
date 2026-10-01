@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Truco Brasa</title>
+<style>
+:root{--feltro:#0d3b26;--feltro2:#145233;--borda:#0a2a1b;--ouro:#e0b84c;--texto:#eef3ea;--suave:#a9c2b0;--carta:#fbf7ea;--verm:#c0262d;--prt:#1b1b1b;--erro:#ff9d8f}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--feltro);color:var(--texto);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;overflow-x:hidden}
+body{min-height:100vh}
+main{max-width:760px;margin:0 auto;padding:16px}
+h1{font-size:1.6rem;margin:.2em 0 .6em;letter-spacing:.04em;color:var(--ouro)}
+h2{font-size:1.05rem;margin:1.2em 0 .5em;color:var(--ouro)}
+section[hidden]{display:none}
+.painel{background:var(--feltro2);border:1px solid var(--borda);border-radius:10px;padding:14px;margin-bottom:14px}
+label{display:block;margin:.6em 0 .2em;color:var(--suave);font-size:.9rem}
+input,select{width:100%;padding:12px;border-radius:8px;border:1px solid var(--borda);background:#0b2f1f;color:var(--texto);font-size:1rem}
+button{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:12px 16px;background:var(--ouro);color:#2a1d00;font-weight:700}
+button.sec{background:transparent;color:var(--texto);border:1px solid var(--suave)}
+button:disabled{opacity:.35;cursor:not-allowed}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.linha{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.linha>*{flex:1 1 140px}
+.msg-erro{color:var(--erro);min-height:1.3em;margin:.5em 0 0;font-size:.95rem}
+.topo{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.saldo{font-size:1.3rem;font-weight:700;color:var(--ouro)}
+.abas{display:flex;gap:8px;margin-bottom:10px}
+.abas button{flex:1}
+.abas button[aria-selected=true]{background:var(--ouro);color:#2a1d00}
+.abas button[aria-selected=false]{background:transparent;color:var(--texto);border:1px solid var(--suave)}
+ul.lista{list-style:none;margin:0;padding:0}
+ul.lista li{padding:8px 0;border-bottom:1px solid var(--borda);display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap;overflow-wrap:anywhere}
+.emb{display:inline-block;background:#0b2f1f;border:1px solid var(--borda);border-radius:999px;padding:3px 10px;margin:2px;font-size:.85rem}
+.segredo{background:#3a2c00;border:2px solid var(--ouro);border-radius:8px;padding:10px;margin:10px 0;overflow-wrap:anywhere}
+.segredo code{display:block;font-size:1.05rem;margin-top:6px;user-select:all}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--borda);overflow-wrap:anywhere}
+/* mesa */
+#mesa-tela{padding:0}
+.hud{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:.95rem;margin-bottom:8px}
+.hud .caixa{background:var(--borda);border-radius:8px;padding:6px 10px}
+.carta{font-family:"Apple Color Emoji","Segoe UI Symbol","Noto Sans Symbols 2","Noto Sans Symbols",serif;line-height:1;background:var(--carta);border-radius:6px;display:inline-block;padding:0 2px;color:var(--prt)}
+.carta.verm{color:var(--verm)}
+.carta.verso{color:#274c9a}
+.carta.mesa-c{font-size:56px}
+.carta.mao-c{font-size:72px;border:0;cursor:pointer}
+button.carta.mao-c{background:var(--carta);padding:0 2px}
+button.carta.mao-c:disabled{opacity:.5}
+button.carta.mao-c.sel{outline:3px solid var(--ouro)}
+.pequena{font-size:34px}
+.tabuleiro{display:grid;gap:8px;grid-template-columns:1fr 1.6fr 1fr;grid-template-areas:". topo ." "esq centro dir" ". base .";align-items:center;background:radial-gradient(ellipse at center,#1a6a42,#0d3b26);border:3px solid var(--borda);border-radius:18px;padding:10px;min-height:340px}
+.tabuleiro.um{grid-template-areas:"topo topo topo" "centro centro centro" "base base base"}
+.assento{text-align:center;font-size:.85rem;padding:6px;border-radius:10px;border:2px solid transparent;min-width:0;overflow-wrap:anywhere}
+.assento.vez{border-color:var(--ouro);background:rgba(224,184,76,.15)}
+.assento .nome{font-weight:700}
+.a-topo{grid-area:topo}.a-esq{grid-area:esq}.a-dir{grid-area:dir}.a-base{grid-area:base}
+.centro{grid-area:centro;display:flex;flex-wrap:wrap;gap:4px;justify-content:center;align-items:center;min-height:70px}
+.jogada{text-align:center;font-size:.7rem;color:var(--suave)}
+.jogada .carta{display:block;margin:auto}
+#minha-mao{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:6px 0}
+.acoes{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.acoes button{flex:1 1 110px}
+#btn-pedir,#btn-aumentar{background:#d6492f;color:#fff}
+#btn-correr,#btn-onze-correr{background:#6b2a2a;color:#fff}
+#btn-aceitar,#btn-onze-aceitar{background:#2f8f55;color:#fff}
+#btn-coberta[aria-pressed=true]{background:var(--ouro);color:#2a1d00}
+#btn-coberta{background:transparent;color:var(--texto);border:1px solid var(--suave)}
+#log{height:140px;overflow-y:auto;background:var(--borda);border-radius:8px;padding:8px;font-size:.88rem;margin:0}
+#log div{padding:1px 0}
+#erro{color:var(--erro);min-height:1.3em;font-size:.9rem;margin:4px 0}
+#fim{background:var(--feltro2);border:2px solid var(--ouro);border-radius:12px;padding:16px;margin:12px 0;text-align:center}
+#fim h2{margin:0 0 8px}
+.parceiro{font-size:.85rem;color:var(--suave);text-align:center}
+.parceiro .carta{font-size:40px}
+.dica{color:var(--suave);font-size:.85rem}
+@media (max-width:420px){main{padding:10px}.carta.mao-c{font-size:64px}.carta.mesa-c{font-size:48px}.assento{font-size:.78rem;padding:3px}}
+</style>
+</head>
+<body>
+<main>
+<h1>Truco Brasa</h1>
+
+<!-- ENTRADA -->
+<section id="tela-entrada" hidden>
+ <div class="painel">
+  <label for="apelido">Apelido</label>
+  <input id="apelido" data-teste="campo-apelido" autocomplete="username" autocapitalize="none" spellcheck="false">
+  <label for="senha">Senha</label>
+  <input id="senha" type="password" data-teste="campo-senha" autocomplete="current-password">
+  <div class="linha" style="margin-top:14px">
+   <button id="btn-registrar" data-teste="btn-registrar" type="button">Criar conta e jogar</button>
+   <button id="btn-entrar" class="sec" data-teste="btn-entrar" type="button">Entrar</button>
+  </div>
+  <p id="erro-entrada" class="msg-erro" role="alert"></p>
+ </div>
+</section>
+
+<!-- SAGUAO -->
+<section id="tela-saguao" hidden>
+ <div class="painel topo">
+  <div><strong id="eu-apelido"></strong><div class="dica" id="eu-stats"></div></div>
+  <div class="saldo"><span data-teste="saldo" id="saldo">0</span> moedas</div>
+  <button id="btn-sair" class="sec" data-teste="btn-sair" type="button">Sair</button>
+ </div>
+ <div class="painel">
+  <div class="linha">
+   <div><label for="modo">Modo</label>
+    <select id="modo" data-teste="seletor-modo"><option value="1x1">1x1</option><option value="2x2">2x2</option></select></div>
+   <div><label for="aposta">Aposta (moedas)</label>
+    <input id="aposta" type="number" min="0" step="1" value="0" inputmode="numeric" data-teste="campo-aposta"></div>
+  </div>
+  <div class="linha" style="margin-top:12px"><button id="btn-procurar" data-teste="btn-procurar" type="button">Procurar mesa</button></div>
+  <p id="fila-info" class="dica" role="status"></p>
+  <p id="erro-saguao" class="msg-erro" role="alert"></p>
+ </div>
+ <div class="painel">
+  <h2 style="margin-top:0">Seus emblemas</h2>
+  <div id="emblemas" data-teste="emblemas"></div>
+ </div>
+ <div class="painel">
+  <div class="abas" role="tablist">
+   <button type="button" role="tab" id="aba-rank" aria-selected="true">Ranking</button>
+   <button type="button" role="tab" id="aba-hooks" aria-selected="false">Webhooks</button>
+  </div>
+  <div id="painel-rank" data-teste="ranking"></div>
+  <div id="painel-hooks" data-teste="webhooks" hidden>
+   <label for="webhook-url">URL do webhook</label>
+   <input id="webhook-url" type="url" placeholder="https://..." data-teste="campo-webhook-url">
+   <div class="linha" style="margin-top:10px"><button id="btn-webhook" type="button" data-teste="btn-webhook-registrar">Registrar webhook</button></div>
+   <div id="webhook-novo" class="segredo" hidden>
+    <strong>Guarde este segredo agora. Ele não será mostrado de novo.</strong>
+    <code id="webhook-segredo" data-teste="webhook-segredo"></code>
+   </div>
+   <p id="erro-hook" class="msg-erro" role="alert"></p>
+   <ul class="lista" id="lista-hooks"></ul>
+  </div>
+ </div>
+</section>
+
+<!-- MESA -->
+<section id="tela-mesa" hidden>
+ <div data-teste="mesa" id="mesa-tela">
+  <div class="hud">
+   <div class="caixa" data-teste="placar" id="placar">Placar</div>
+   <div class="caixa" id="info-mao"></div>
+   <div class="caixa" id="info-vira"></div>
+  </div>
+  <div class="tabuleiro" id="tabuleiro"></div>
+  <div class="parceiro" id="parceiro" hidden></div>
+  <div id="minha-mao" data-teste="minha-mao"></div>
+  <div class="acoes">
+   <button id="btn-coberta" data-teste="btn-coberta" type="button" aria-pressed="false" disabled>De costas</button>
+   <button id="btn-pedir" data-teste="btn-pedir" type="button" disabled>TRUCO!</button>
+   <button id="btn-aceitar" data-teste="btn-aceitar" type="button" disabled>Aceitar</button>
+   <button id="btn-aumentar" data-teste="btn-aumentar" type="button" disabled>Aumentar</button>
+   <button id="btn-correr" data-teste="btn-correr" type="button" disabled>Correr</button>
+   <button id="btn-onze-aceitar" data-teste="btn-onze-aceitar" type="button" disabled>Mão de onze: jogar</button>
+   <button id="btn-onze-correr" data-teste="btn-onze-correr" type="button" disabled>Mão de onze: correr</button>
+  </div>
+  <div id="erro" data-teste="erro" role="status"></div>
+  <div id="fim" data-teste="fim" hidden></div>
+  <div id="log" data-teste="log" aria-live="polite"></div>
+ </div>
+</section>
+
+<!-- FILA / CAIU -->
+<section id="tela-fila" hidden>
+ <div class="painel">
+  <p id="fila-texto" role="status">Procurando mesa...</p>
+  <button id="btn-cancelar-fila" class="sec" type="button">Cancelar</button>
+ </div>
+</section>
+<section id="tela-caiu" hidden>
+ <div class="painel">
+  <p role="alert"><strong>conexão caiu</strong></p>
+  <button id="btn-reconectar" type="button">Reconectar</button>
+ </div>
+</section>
+</main>
+
+<script>
+(function(){
+'use strict';
+var $=function(id){return document.getElementById(id)};
+var telas=['entrada','saguao','mesa','fila','caiu'];
+function mostrar(n){telas.forEach(function(t){$('tela-'+t).hidden=(t!==n)})}
+
+var eu=null, ws=null, fechandoDeProposito=false, emPartida=false, terminou=false;
+var apelidos={}, meuAssento=null, nJog=2, ultimoEstado=null, cobertaLigada=false;
+
+function api(metodo,url,corpo){
+  var o={method:metodo,credentials:'same-origin',headers:{}};
+  if(corpo!==undefined){o.headers['Content-Type']='application/json';o.body=JSON.stringify(corpo)}
+  return fetch(url,o).then(function(r){
+    return r.text().then(function(txt){
+      var j=null;try{j=txt?JSON.parse(txt):null}catch(e){}
+      if(!r.ok){var e=new Error((j&&j.mensagem)||('erro '+r.status));e.status=r.status;throw e}
+      return j;
+    });
+  });
+}
+function limpa(el){while(el.firstChild)el.removeChild(el.firstChild)}
+function el(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e}
+
+/* ---------- cartas ---------- */
+var NAIPES={0x1F0A0:'espadas',0x1F0B0:'copas',0x1F0C0:'ouros',0x1F0D0:'paus'};
+var NUMS={1:'ás',2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',0xB:'valete',0xC:'cavalo',0xD:'dama',0xE:'rei'};
+function nomeCarta(c){
+  if(!c)return 'carta de costas';
+  var cp=c.codePointAt(0), base=cp&~0xF, n=cp&0xF;
+  if(cp===0x1F0A0)return 'carta de costas';
+  if(NAIPES[base]&&NUMS[n])return NUMS[n]+(n===1||n>=0xB?' de ':' de ')+NAIPES[base];
+  return 'carta';
+}
+function ehVermelha(c){var b=c.codePointAt(0)&~0xF;return b===0x1F0B0||b===0x1F0C0}
+function cartaEl(c,tag,cls){
+  var e=el(tag||'span','carta '+(cls||''),c||'\u{1F0A0}');
+  if(!c||c.codePointAt(0)===0x1F0A0)e.classList.add('verso');
+  else if(ehVermelha(c))e.classList.add('verm');
+  e.setAttribute('aria-label',nomeCarta(c));
+  if((tag||'span')==='span')e.setAttribute('role','img');
+  return e;
+}
+
+/* ---------- entrada ---------- */
+function entrar(rota){
+  var ap=$('apelido').value.trim(), se=$('senha').value;
+  $('erro-entrada').textContent='';
+  api('POST',rota,{apelido:ap,senha:se}).then(function(){$('senha').value='';return abrirSaguao()})
+   .catch(function(e){$('erro-entrada').textContent=e.message});
+}
+$('btn-registrar').onclick=function(){entrar('/api/registrar')};
+$('btn-entrar').onclick=function(){entrar('/api/entrar')};
+['apelido','senha'].forEach(function(id){$(id).addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();entrar('/api/entrar')}})});
+function telaEntrada(){mostrar('entrada');$('apelido').focus()}
+
+/* ---------- saguao ---------- */
+function abrirSaguao(){
+  return api('GET','/api/eu').then(function(d){
+    eu=d;mostrar('saguao');
+    $('eu-apelido').textContent=d.apelido;
+    $('saldo').textContent=d.moedas;
+    $('eu-stats').textContent=d.partidas+' partidas, '+d.vitorias+' vitórias, '+d.derrotas+' derrotas, melhor sequência '+d.melhor_sequencia;
+    $('aposta').max=d.moedas;
+    if(+$('aposta').value>d.moedas)$('aposta').value=d.moedas;
+    var em=$('emblemas');limpa(em);
+    (d.emblemas||[]).forEach(function(b){
+      var s=el('span','emb',(b.icone?b.icone+' ':'')+b.nome);s.title=b.descricao||'';em.appendChild(s);
+    });
+    if(!(d.emblemas||[]).length)em.textContent='Nenhum emblema ainda.';
+    carregarRanking();carregarHooks();
+  });
+}
+function carregarRanking(){
+  var box=$('painel-rank');
+  api('GET','/api/ranking').then(function(l){
+    limpa(box);
+    var t=el('table'),h=el('tr');
+    ['#','Jogador','V','D','Moedas','Emblemas'].forEach(function(x){h.appendChild(el('th',null,x))});
+    t.appendChild(h);
+    (l||[]).forEach(function(r,i){
+      var tr=el('tr');
+      tr.appendChild(el('td',null,String(i+1)));tr.appendChild(el('td',null,r.apelido));
+      tr.appendChild(el('td',null,String(r.vitorias)));tr.appendChild(el('td',null,String(r.derrotas)));
+      tr.appendChild(el('td',null,String(r.moedas)));
+      tr.appendChild(el('td',null,(r.emblemas||[]).map(function(b){return typeof b==='string'?b:(b.icone||b.nome||b.chave||'')}).join(' ')));
+      t.appendChild(tr);
+    });
+    box.appendChild(t);
+  }).catch(function(e){box.textContent=e.message});
+}
+function carregarHooks(){
+  var ul=$('lista-hooks');
+  api('GET','/api/webhooks').then(function(l){
+    limpa(ul);
+    (l||[]).forEach(function(w){
+      var li=el('li');li.appendChild(el('span',null,w.url));
+      var b=el('button','sec','Remover');b.type='button';
+      b.onclick=function(){api('DELETE','/api/webhooks/'+encodeURIComponent(w.id)).then(carregarHooks).catch(function(e){$('erro-hook').textContent=e.message})};
+      li.appendChild(b);ul.appendChild(li);
+    });
+    if(!(l||[]).length)ul.appendChild(el('li',null,'Nenhum webhook.'));
+  }).catch(function(e){$('erro-hook').textContent=e.message});
+}
+$('btn-webhook').onclick=function(){
+  $('erro-hook').textContent='';
+  api('POST','/api/webhooks',{url:$('webhook-url').value.trim()}).then(function(w){
+    $('webhook-segredo').textContent=w.segredo;$('webhook-novo').hidden=false;$('webhook-url').value='';carregarHooks();
+  }).catch(function(e){$('erro-hook').textContent=e.message});
+};
+function aba(qual){
+  var r=qual==='rank';
+  $('aba-rank').setAttribute('aria-selected',r);$('aba-hooks').setAttribute('aria-selected',!r);
+  $('painel-rank').hidden=!r;$('painel-hooks').hidden=r;
+}
+$('aba-rank').onclick=function(){aba('rank')};
+$('aba-hooks').onclick=function(){aba('hooks')};
+$('btn-sair').onclick=function(){api('POST','/api/sair').catch(function(){}).then(function(){eu=null;telaEntrada()})};
+
+/* ---------- websocket ---------- */
+$('btn-procurar').onclick=function(){
+  $('erro-saguao').textContent='';
+  var aposta=Math.max(0,parseInt($('aposta').value,10)||0);
+  var modo=$('modo').value;
+  fechandoDeProposito=false;terminou=false;emPartida=false;apelidos={};ultimoEstado=null;
+  var proto=location.protocol==='https:'?'wss://':'ws://';
+  ws=new WebSocket(proto+location.host+'/ws?modo='+encodeURIComponent(modo)+'&aposta='+aposta);
+  var meu=ws;
+  $('fila-texto').textContent='Procurando mesa...';mostrar('fila');
+  meu.onmessage=function(ev){if(meu!==ws)return;var m;try{m=JSON.parse(ev.data)}catch(e){return}tratar(m)};
+  meu.onclose=function(){
+    if(meu!==ws)return;
+    if(fechandoDeProposito||terminou)return;
+    mostrar('caiu');
+  };
+};
+$('btn-cancelar-fila').onclick=function(){fechar();abrirSaguao().catch(telaEntrada)};
+$('btn-reconectar').onclick=function(){fechar();abrirSaguao().catch(telaEntrada)};
+function fechar(){fechandoDeProposito=true;if(ws){try{ws.close()}catch(e){}}ws=null}
+function enviar(o){if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))}
+
+function tratar(m){
+  switch(m.t){
+   case 'fila':
+     $('fila-texto').textContent='Na fila ('+m.modo+', aposta '+m.aposta+'): faltam '+m.faltam+' jogador(es).';
+     if(!emPartida)mostrar('fila');break;
+   case 'mesa':
+     emPartida=true;meuAssento=m.assento;apelidos={};
+     (m.jogadores||[]).forEach(function(j){apelidos[j.assento]=j.apelido});
+     nJog=(m.jogadores||[]).length||2;
+     limpa($('log'));$('fim').hidden=true;$('erro').textContent='';cobertaLigada=false;
+     mostrar('mesa');break;
+   case 'estado':ultimoEstado=m;if(!emPartida){emPartida=true;meuAssento=m.assento;mostrar('mesa')}desenhar(m);break;
+   case 'avisos':(m.avisos||[]).forEach(function(a){logar(narrar(a))});break;
+   case 'erro':
+     var e=$('erro');e.textContent=m.mensagem||m.erro||'erro';
+     clearTimeout(e._t);e._t=setTimeout(function(){e.textContent=''},4000);break;
+   case 'fim':fimDePartida(m);break;
+  }
+}
+function logar(txt){
+  if(!txt)return;var l=$('log');l.appendChild(el('div',null,txt));l.scrollTop=l.scrollHeight;
+}
+function nome(a){return apelidos[a]!==undefined?apelidos[a]:('assento '+a)}
+var VALORES={1:'',3:'TRUCO',6:'SEIS',9:'NOVE',12:'DOZE'};
+function narrar(a){
+  switch(a.aviso){
+   case 'jogou':return a.carta?nome(a.assento)+' jogou '+a.carta:nome(a.assento)+' jogou uma carta de costas';
+   case 'rodada_resolvida':
+     return a.vencedora===null||a.vencedora===undefined?'rodada '+(a.indice+1)+' empatou':'rodada '+(a.indice+1)+': dupla '+a.vencedora+' venceu'+(a.puxador_seguinte!==undefined&&a.puxador_seguinte!==null?', '+nome(a.puxador_seguinte)+' abre a próxima':'');
+   case 'pediu':return nome(a.assento)+' pediu '+(VALORES[a.valor_proposto]||a.valor_proposto);
+   case 'aceitou':return nome(a.assento)+' aceitou, mão vale '+a.valor;
+   case 'correu':return nome(a.assento)+' correu';
+   case 'mao_terminou':
+     var f=a.fim||{},p=a.placar?' Placar '+a.placar[0]+' x '+a.placar[1]+'.':'';
+     if(f.como==='correu')return 'dupla '+f.vencedora+' levou '+f.pontos+' ponto(s) porque o outro lado correu.'+p;
+     if(f.como==='onze_recusada')return 'mão de onze recusada: dupla '+f.vencedora+' levou '+f.pontos+' ponto(s).'+p;
+     return 'dupla '+f.vencedora+' fez a mão, '+f.pontos+' pontos.'+p;
+   case 'mao_de_onze':return 'mão de onze para a dupla '+a.equipe;
+   case 'mao_de_ferro':return 'mão de ferro';
+   case 'mao_comecou':return 'mão '+a.numero+' começou ('+tipoStr(a.tipo)+')';
+   case 'onze_respondida':return 'dupla '+a.equipe+(a.aceita?' aceitou jogar a mão de onze':' correu da mão de onze');
+   case 'partida_terminou':return 'partida terminou: dupla '+a.vencedora+' venceu';
+  }
+  return a.aviso||'';
+}
+function tipoStr(t){return t&&typeof t==='object'?String(t.tipo):String(t||'normal')}
+
+/* ---------- mesa ---------- */
+function desenhar(s){
+  var acoes=s.acoes||[];
+  var tipo=tipoStr(s.tipo);
+  $('placar').textContent='Nós '+(s.placar?s.placar[s.equipe]:'?')+' x '+(s.placar?s.placar[1-s.equipe]:'?')+' Eles';
+  $('placar').setAttribute('aria-label','placar: dupla 0 '+s.placar[0]+', dupla 1 '+s.placar[1]);
+  $('info-mao').textContent='Mão '+s.numero_da_mao+' vale '+s.valor+(tipo!=='normal'?' ('+tipo.replace('_',' ')+')':'');
+  var iv=$('info-vira');limpa(iv);
+  iv.appendChild(document.createTextNode('Vira '));iv.appendChild(cartaEl(s.vira,'span','pequena'));
+  iv.appendChild(document.createTextNode(' Manilha '));iv.appendChild(cartaEl(s.manilha,'span','pequena'));
+  iv.firstChild&&0;
+  // assentos
+  var n=(s.cartas_na_mao&&s.cartas_na_mao.length)||nJog;
+  var tab=$('tabuleiro');limpa(tab);tab.className='tabuleiro'+(n===2?' um':'');
+  var pos=n===2?{0:'base',1:'topo'}:{0:'base',1:'esq',2:'topo',3:'dir'};
+  var jogadas={};(s.mesa||[]).forEach(function(j){jogadas[j.assento]=j});
+  for(var rel=0;rel<n;rel++){
+    var as=(s.assento+rel)%n;
+    var d=el('div','assento a-'+pos[rel]);
+    if(s.vez===as)d.classList.add('vez');
+    d.appendChild(el('div','nome',nome(as)+(as===s.assento?' (você)':'')));
+    d.appendChild(el('div',null,'dupla '+(n===2?as:as%2)+' · '+(s.cartas_na_mao?s.cartas_na_mao[as]:'?')+' cartas'));
+    if(s.vez===as)d.appendChild(el('div','nome','vez dele'));
+    tab.appendChild(d);
+  }
+  var c=el('div','centro');
+  (s.mesa||[]).forEach(function(j){
+    var w=el('div','jogada');
+    w.appendChild(cartaEl(j.coberta?null:j.carta,'span','mesa-c'));
+    w.appendChild(el('span',null,nome(j.assento)));
+    c.appendChild(w);
+  });
+  if(!(s.mesa||[]).length)c.appendChild(el('span','dica','mesa vazia'));
+  var rd=(s.rodadas||[]).map(function(r,i){return (i+1)+':'+(r===null?'empate':'dupla '+r)}).join('  ');
+  if(rd){var rr=el('div','dica',rd);rr.style.flexBasis='100%';rr.style.textAlign='center';c.appendChild(rr)}
+  if(s.pendencia){
+    var p=s.pendencia,pe=el('div','nome',nome(p.assento_pedinte)+' pediu '+(VALORES[p.valor_proposto]||p.valor_proposto)+'. '+nome(p.assento_respondente)+' responde.');
+    pe.style.flexBasis='100%';pe.style.textAlign='center';pe.style.color='var(--ouro)';c.appendChild(pe);
+  }
+  tab.appendChild(c);
+  // minha mao
+  var mao=$('minha-mao');limpa(mao);
+  var podeJ=acoes.indexOf('jogar')>=0||acoes.indexOf('jogar_coberta')>=0;
+  var podeC=acoes.indexOf('jogar_coberta')>=0;
+  if(!podeC)cobertaLigada=false;
+  (s.minhas_cartas||[]).forEach(function(cc,i){
+    var b=cartaEl(cc,'button','mao-c');b.type='button';b.setAttribute('data-teste','carta');
+    b.disabled=!podeJ;
+    if(cobertaLigada)b.classList.add('sel');
+    b.onclick=function(){
+      var cob=cobertaLigada&&podeC;
+      enviar({t:'jogar',indice:i,coberta:cob});cobertaLigada=false;
+    };
+    mao.appendChild(b);
+  });
+  var par=$('parceiro');
+  if(s.cartas_do_parceiro&&s.cartas_do_parceiro.length){
+    limpa(par);par.hidden=false;par.appendChild(el('div',null,'cartas do parceiro'));
+    s.cartas_do_parceiro.forEach(function(cc){par.appendChild(cartaEl(cc,'span'))});
+  }else par.hidden=true;
+  // botoes
+  var has=function(a){return acoes.indexOf(a)>=0};
+  var bc=$('btn-coberta');bc.disabled=!podeC;bc.setAttribute('aria-pressed',String(cobertaLigada&&podeC));
+  var rotPedir={1:'TRUCO!',3:'SEIS!',6:'NOVE!',9:'DOZE!'}[s.valor];
+  $('btn-pedir').textContent=rotPedir||'Pedir';$('btn-pedir').disabled=!has('pedir');
+  var rotAum=s.pendencia?{3:'SEIS!',6:'NOVE!',9:'DOZE!'}[s.pendencia.valor_proposto]:null;
+  $('btn-aumentar').textContent=rotAum||'Aumentar';$('btn-aumentar').disabled=!has('aumentar');
+  $('btn-aceitar').disabled=!has('aceitar');$('btn-correr').disabled=!has('correr');
+  $('btn-onze-aceitar').disabled=!has('onze_aceitar');$('btn-onze-correr').disabled=!has('onze_correr');
+}
+$('btn-coberta').onclick=function(){cobertaLigada=!cobertaLigada;if(ultimoEstado)desenhar(ultimoEstado)};
+$('btn-pedir').onclick=function(){enviar({t:'pedir'})};
+$('btn-aceitar').onclick=function(){enviar({t:'aceitar'})};
+$('btn-correr').onclick=function(){enviar({t:'correr'})};
+$('btn-aumentar').onclick=function(){enviar({t:'aumentar'})};
+$('btn-onze-aceitar').onclick=function(){enviar({t:'onze',aceita:true})};
+$('btn-onze-correr').onclick=function(){enviar({t:'onze',aceita:false})};
+
+function fimDePartida(m){
+  terminou=true;emPartida=false;
+  var f=$('fim');limpa(f);f.hidden=false;
+  var ganho=m.ganho||0;
+  var minha=ultimoEstado?ultimoEstado.equipe:null;
+  var venci=minha!==null?m.vencedora===minha:ganho>0;
+  f.appendChild(el('h2',null,venci?'Vitória':'Derrota'));
+  f.appendChild(el('p',null,'Dupla '+m.vencedora+' venceu. Placar '+m.placar[0]+' x '+m.placar[1]+'.'));
+  f.appendChild(el('p',null,'Moedas: '+m.moedas+' ('+(ganho>0?'+':'')+ganho+')'));
+  var b=el('button',null,'Voltar ao saguão');b.type='button';
+  b.onclick=function(){fechar();abrirSaguao().catch(telaEntrada)};
+  f.appendChild(b);b.focus();
+  ['btn-coberta','btn-pedir','btn-aceitar','btn-aumentar','btn-correr','btn-onze-aceitar','btn-onze-correr'].forEach(function(i){$(i).disabled=true});
+  Array.prototype.forEach.call($('minha-mao').children,function(x){x.disabled=true});
+}
+
+/* ---------- inicio ---------- */
+api('GET','/api/eu').then(function(){return abrirSaguao()}).catch(telaEntrada);
+})();
+</script>
+</body>
+</html>

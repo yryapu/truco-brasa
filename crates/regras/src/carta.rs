@@ -97,7 +97,10 @@ impl Numero {
     /// O número seguinte na ordem de força, de forma **circular** — é o que faz a vira `3`
     /// dar manilha `4` (R-05).
     pub fn seguinte(self) -> Numero {
-        let i = Numero::TODOS.iter().position(|n| *n == self).expect("número está em TODOS");
+        let i = Numero::TODOS
+            .iter()
+            .position(|n| *n == self)
+            .expect("número está em TODOS");
         Numero::TODOS[(i + 1) % Numero::TODOS.len()]
     }
 }
@@ -134,7 +137,9 @@ impl Carta {
             0x1F0D0 => Naipe::Paus,
             _ => return None,
         };
-        let numero = Numero::TODOS.into_iter().find(|n| n.deslocamento_unicode() == (cp & 0xF))?;
+        let numero = Numero::TODOS
+            .into_iter()
+            .find(|n| n.deslocamento_unicode() == (cp & 0xF))?;
         Some(Carta::nova(numero, naipe))
     }
 
@@ -183,7 +188,9 @@ impl<'de> Deserialize<'de> for Carta {
         let s = String::deserialize(d)?;
         let mut cs = s.chars();
         let (Some(c), None) = (cs.next(), cs.next()) else {
-            return Err(D::Error::custom(format!("esperava um caractere de carta, veio {s:?}")));
+            return Err(D::Error::custom(format!(
+                "esperava um caractere de carta, veio {s:?}"
+            )));
         };
         Carta::do_unicode(c).ok_or_else(|| D::Error::custom(format!("{c:?} não é carta do truco")))
     }

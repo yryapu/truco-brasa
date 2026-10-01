@@ -1,4 +1,8 @@
 //! Ajudas de teste. Nada de regra aqui.
+//!
+//! `allow(dead_code)`: cada arquivo de teste compila este módulo inteiro, e nenhum deles
+//! usa todas as ajudas — o aviso seria sobre o que o *outro* arquivo usa.
+#![allow(dead_code)]
 
 use truco_regras::carta::{Carta, Naipe, Numero};
 

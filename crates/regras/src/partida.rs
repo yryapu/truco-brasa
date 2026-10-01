@@ -106,7 +106,10 @@ impl FimDaMao {
 #[serde(rename_all = "snake_case", tag = "acao")]
 pub enum Acao {
     /// Põe a `indice`-ésima carta da mão na mesa. `coberta` só na 2ª e 3ª rodadas (R-14).
-    Jogar { indice: usize, coberta: bool },
+    Jogar {
+        indice: usize,
+        coberta: bool,
+    },
     /// Pede truco, ou o aumento seguinte na escada (R-15).
     Pedir,
     Aceitar,
@@ -114,7 +117,9 @@ pub enum Acao {
     /// Aceita e retruca de uma vez (R-17).
     Aumentar,
     /// Resposta da mão de onze (R-22).
-    Onze { aceita: bool },
+    Onze {
+        aceita: bool,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -170,17 +175,45 @@ impl std::error::Error for Erro {}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "aviso")]
 pub enum Aviso {
-    Jogou { assento: usize, carta: Option<char> },
-    RodadaResolvida { indice: usize, vencedora: Option<u8>, puxador_seguinte: usize },
-    Pediu { assento: usize, valor_proposto: u8 },
-    Aceitou { assento: usize, valor: u8 },
-    Correu { assento: usize },
-    MaoTerminou { fim: FimDaMao, placar: [u8; 2] },
-    MaoDeOnze { equipe: u8 },
-    OnzeRespondida { equipe: u8, aceita: bool },
+    Jogou {
+        assento: usize,
+        carta: Option<char>,
+    },
+    RodadaResolvida {
+        indice: usize,
+        vencedora: Option<u8>,
+        puxador_seguinte: usize,
+    },
+    Pediu {
+        assento: usize,
+        valor_proposto: u8,
+    },
+    Aceitou {
+        assento: usize,
+        valor: u8,
+    },
+    Correu {
+        assento: usize,
+    },
+    MaoTerminou {
+        fim: FimDaMao,
+        placar: [u8; 2],
+    },
+    MaoDeOnze {
+        equipe: u8,
+    },
+    OnzeRespondida {
+        equipe: u8,
+        aceita: bool,
+    },
     MaoDeFerro,
-    MaoComecou { numero: u32, tipo: TipoMao },
-    PartidaTerminou { vencedora: u8 },
+    MaoComecou {
+        numero: u32,
+        tipo: TipoMao,
+    },
+    PartidaTerminou {
+        vencedora: u8,
+    },
 }
 
 /// A mão em curso.
@@ -197,7 +230,8 @@ pub struct Mao {
     pub valor: u8,
     pub tipo: TipoMao,
     pub pendencia: Option<Pendencia>,
-    pub(crate) ultima_equipe_pedinte: Option<u8>,
+    /// Dupla que fez o último pedido nesta mão (R-19). Leitura pública; só `pedir` escreve.
+    pub ultima_equipe_pedinte: Option<u8>,
     onze_respondida: bool,
     pub fim: Option<FimDaMao>,
 }
@@ -218,10 +252,12 @@ impl Mao {
     /// replay de partida usaria. `nova` é só isto com um embaralhamento antes.
     pub fn do_baralho(modo: Modo, puxador: usize, placar: [u8; 2], baralho: &[Carta]) -> Mao {
         let n = modo.assentos();
-        assert!(baralho.len() > n * 3, "baralho curto: precisa de 3n cartas e a vira");
+        assert!(
+            baralho.len() > n * 3,
+            "baralho curto: precisa de 3n cartas e a vira"
+        );
 
-        let cartas: Vec<Vec<Carta>> =
-            (0..n).map(|i| baralho[i * 3..i * 3 + 3].to_vec()).collect();
+        let cartas: Vec<Vec<Carta>> = (0..n).map(|i| baralho[i * 3..i * 3 + 3].to_vec()).collect();
         // A vira sai depois das mãos; o resto do monte não é mais usado (R-28).
         let vira = baralho[n * 3];
         let manilha = vira.numero.seguinte();
@@ -233,7 +269,11 @@ impl Mao {
             (false, false) => TipoMao::Normal,
         };
         // R-23: a mão de onze aceita já começa valendo 3. R-26: a de ferro vale 1.
-        let valor = if matches!(tipo, TipoMao::Onze { .. }) { 3 } else { 1 };
+        let valor = if matches!(tipo, TipoMao::Onze { .. }) {
+            3
+        } else {
+            1
+        };
 
         Mao {
             vira,
@@ -296,11 +336,16 @@ pub fn resolver_rodada(mesa: &[Jogada], manilha: Numero) -> Rodada {
 
     // [DECISÃO] todas de costas: ninguém disputa, logo empate. Nenhuma fonte trata o caso.
     let Some(forca_maxima) = disputando.iter().map(|j| j.carta.forca(manilha)).max() else {
-        return Rodada { vencedor: None, puxador_seguinte: mesa[0].assento };
+        return Rodada {
+            vencedor: None,
+            puxador_seguinte: mesa[0].assento,
+        };
     };
 
-    let no_topo: Vec<&&Jogada> =
-        disputando.iter().filter(|j| j.carta.forca(manilha) == forca_maxima).collect();
+    let no_topo: Vec<&&Jogada> = disputando
+        .iter()
+        .filter(|j| j.carta.forca(manilha) == forca_maxima)
+        .collect();
 
     // "quem pôs na mesa a primeira carta que empatou" (R-12) — a ordem de `mesa` é a ordem
     // de jogada, então o primeiro do topo é literalmente esse jogador.
@@ -309,9 +354,15 @@ pub fn resolver_rodada(mesa: &[Jogada], manilha: Numero) -> Rodada {
 
     if equipes.iter().all(|e| *e == equipes[0]) {
         // Inclui o caso de dois parceiros empatarem no topo: a dupla ganhou a rodada.
-        Rodada { vencedor: Some(equipes[0]), puxador_seguinte: primeiro_do_topo }
+        Rodada {
+            vencedor: Some(equipes[0]),
+            puxador_seguinte: primeiro_do_topo,
+        }
     } else {
-        Rodada { vencedor: None, puxador_seguinte: primeiro_do_topo }
+        Rodada {
+            vencedor: None,
+            puxador_seguinte: primeiro_do_topo,
+        }
     }
 }
 
@@ -418,7 +469,9 @@ impl Partida {
         if !self.mao.aguarda_onze() {
             return Err(Erro::NaoEhMaoDeOnze);
         }
-        let TipoMao::Onze { equipe } = self.mao.tipo else { return Err(Erro::NaoEhMaoDeOnze) };
+        let TipoMao::Onze { equipe } = self.mao.tipo else {
+            return Err(Erro::NaoEhMaoDeOnze);
+        };
         // R-22 é decisão da dupla; qualquer um dos dois responde, e vale a primeira resposta.
         // Aqui não há corrida de rede como no truco (ADR-005): não existe vez a perder.
         if equipe_de(assento) != equipe {
@@ -428,7 +481,10 @@ impl Partida {
         avisos.push(Aviso::OnzeRespondida { equipe, aceita });
         if !aceita {
             // R-23: correu, a dupla adversária recebe 1 ponto.
-            let fim = FimDaMao::OnzeRecusada { vencedora: 1 - equipe, pontos: 1 };
+            let fim = FimDaMao::OnzeRecusada {
+                vencedora: 1 - equipe,
+                pontos: 1,
+            };
             self.encerrar_mao(fim, avisos, rng);
         }
         Ok(())
@@ -449,11 +505,14 @@ impl Partida {
             return Err(Erro::NaoEhSuaVez);
         }
         let equipe = equipe_de(assento);
+        // R-15 antes de R-19 de propósito: "a mão já vale doze" é a razão estrutural, e é a
+        // que o jogador precisa ouvir. Dizer "a sua dupla pediu o último" num 12 seria uma
+        // verdade que não explica nada.
+        let valor_proposto = proximo_valor(self.mao.valor).ok_or(Erro::ValorNoTeto)?;
         // R-19: não se pede duas vezes seguidas pela mesma dupla.
         if self.mao.ultima_equipe_pedinte == Some(equipe) {
             return Err(Erro::PedidoSeguidoDaMesmaDupla);
         }
-        let valor_proposto = proximo_valor(self.mao.valor).ok_or(Erro::ValorNoTeto)?;
         self.mao.pendencia = Some(Pendencia {
             equipe_pedinte: equipe,
             assento_pedinte: assento,
@@ -462,7 +521,10 @@ impl Partida {
             valor_proposto,
         });
         self.mao.ultima_equipe_pedinte = Some(equipe);
-        avisos.push(Aviso::Pediu { assento, valor_proposto });
+        avisos.push(Aviso::Pediu {
+            assento,
+            valor_proposto,
+        });
         Ok(())
     }
 
@@ -480,7 +542,10 @@ impl Partida {
         self.mao.pendencia = None;
         // Quem pediu continua devendo a carta: a vez volta para ele.
         self.mao.vez = p.assento_pedinte;
-        avisos.push(Aviso::Aceitou { assento, valor: self.mao.valor });
+        avisos.push(Aviso::Aceitou {
+            assento,
+            valor: self.mao.valor,
+        });
         Ok(())
     }
 
@@ -493,7 +558,10 @@ impl Partida {
         let p = self.pendencia_de(assento)?;
         avisos.push(Aviso::Correu { assento });
         // R-18: quem corre entrega o valor que a mão tinha ANTES do pedido.
-        let fim = FimDaMao::Correu { vencedora: p.equipe_pedinte, pontos: self.mao.valor };
+        let fim = FimDaMao::Correu {
+            vencedora: p.equipe_pedinte,
+            pontos: self.mao.valor,
+        };
         self.encerrar_mao(fim, avisos, rng);
         Ok(())
     }
@@ -513,8 +581,14 @@ impl Partida {
             valor_proposto: proposto,
         });
         self.mao.ultima_equipe_pedinte = Some(equipe);
-        avisos.push(Aviso::Aceitou { assento, valor: self.mao.valor });
-        avisos.push(Aviso::Pediu { assento, valor_proposto: proposto });
+        avisos.push(Aviso::Aceitou {
+            assento,
+            valor: self.mao.valor,
+        });
+        avisos.push(Aviso::Pediu {
+            assento,
+            valor_proposto: proposto,
+        });
         Ok(())
     }
 
@@ -544,7 +618,11 @@ impl Partida {
             return Err(Erro::IndiceDeCartaInvalido);
         }
         let carta = mao_do_jogador.remove(indice);
-        self.mao.mesa.push(Jogada { assento, carta, coberta });
+        self.mao.mesa.push(Jogada {
+            assento,
+            carta,
+            coberta,
+        });
         avisos.push(Aviso::Jogou {
             assento,
             // A carta de costas não vai no aviso: quem está de fora não pode sabê-la.
@@ -567,7 +645,11 @@ impl Partida {
 
         match decidir_mao(&self.mao.rodadas) {
             Some(vencedora) => {
-                let pontos = if vencedora.is_some() { self.mao.valor } else { 0 };
+                let pontos = if vencedora.is_some() {
+                    self.mao.valor
+                } else {
+                    0
+                };
                 let fim = FimDaMao::Cartas { vencedora, pontos };
                 self.encerrar_mao(fim, avisos, rng);
             }
@@ -581,7 +663,10 @@ impl Partida {
         if let Some(e) = fim.vencedora() {
             self.placar[e as usize] = self.placar[e as usize].saturating_add(fim.pontos());
         }
-        avisos.push(Aviso::MaoTerminou { fim, placar: self.placar });
+        avisos.push(Aviso::MaoTerminou {
+            fim,
+            placar: self.placar,
+        });
 
         // R-27: chega ou passa de 12 e a partida acabou.
         if let Some(e) = (0..2u8).find(|e| self.placar[*e as usize] >= ALVO) {
@@ -594,7 +679,10 @@ impl Partida {
         // R-13: o direito de puxar anda um assento por mão.
         let puxador = (self.numero_da_mao as usize) % self.assentos();
         self.mao = Mao::nova(self.modo, puxador, self.placar, rng);
-        avisos.push(Aviso::MaoComecou { numero: self.numero_da_mao, tipo: self.mao.tipo });
+        avisos.push(Aviso::MaoComecou {
+            numero: self.numero_da_mao,
+            tipo: self.mao.tipo,
+        });
         match self.mao.tipo {
             TipoMao::Onze { equipe } => avisos.push(Aviso::MaoDeOnze { equipe }),
             TipoMao::Ferro => avisos.push(Aviso::MaoDeFerro),

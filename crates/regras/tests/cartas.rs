@@ -16,7 +16,10 @@ fn r01_baralho_tem_quarenta_cartas_distintas_sem_8_9_10() {
     // Os 8, 9 e 10 existem no bloco Unicode mas não no baralho do truco.
     for cp in [0x1F0A8u32, 0x1F0A9, 0x1F0AA, 0x1F0B8, 0x1F0C9, 0x1F0DA] {
         let ch = char::from_u32(cp).unwrap();
-        assert!(Carta::do_unicode(ch).is_none(), "R-01: {ch} (8/9/10) não é carta do truco");
+        assert!(
+            Carta::do_unicode(ch).is_none(),
+            "R-01: {ch} (8/9/10) não é carta do truco"
+        );
     }
 }
 
@@ -61,14 +64,30 @@ fn r03_comuns_de_mesmo_numero_empatam_qualquer_que_seja_o_naipe() {
 
 #[test]
 fn r04_a_manilha_eh_o_numero_seguinte_a_vira() {
-    assert_eq!(Numero::Cinco.seguinte(), Numero::Seis, "R-04: vira 5 → manilha 6");
-    assert_eq!(Numero::Valete.seguinte(), Numero::Rei, "R-04: vira J → manilha K (J<K<A)");
-    assert_eq!(Numero::Dama.seguinte(), Numero::Valete, "R-04: vira Q → manilha J");
+    assert_eq!(
+        Numero::Cinco.seguinte(),
+        Numero::Seis,
+        "R-04: vira 5 → manilha 6"
+    );
+    assert_eq!(
+        Numero::Valete.seguinte(),
+        Numero::Rei,
+        "R-04: vira J → manilha K (J<K<A)"
+    );
+    assert_eq!(
+        Numero::Dama.seguinte(),
+        Numero::Valete,
+        "R-04: vira Q → manilha J"
+    );
 }
 
 #[test]
 fn r05_a_ordem_eh_circular_vira_tres_da_manilha_quatro() {
-    assert_eq!(Numero::Tres.seguinte(), Numero::Quatro, "R-05: vira 3 → manilha 4");
+    assert_eq!(
+        Numero::Tres.seguinte(),
+        Numero::Quatro,
+        "R-05: vira 3 → manilha 4"
+    );
 }
 
 #[test]
@@ -80,7 +99,10 @@ fn r06_manilha_bate_qualquer_comum_inclusive_o_tres() {
     );
     for n in Numero::TODOS.into_iter().filter(|n| *n != m) {
         let comum = Carta::nova(n, Naipe::Paus);
-        assert!(comum.forca(m) < c("4o").forca(m), "R-06: manilha bate {comum}");
+        assert!(
+            comum.forca(m) < c("4o").forca(m),
+            "R-06: manilha bate {comum}"
+        );
     }
 }
 
@@ -104,7 +126,11 @@ fn r07_entre_manilhas_desempata_o_naipe_ouros_espadas_copas_paus() {
 fn r08_o_naipe_da_vira_nao_importa() {
     for n in Naipe::TODOS {
         let vira = Carta::nova(Numero::Cinco, n);
-        assert_eq!(vira.numero.seguinte(), Numero::Seis, "R-08: a vira define só o número");
+        assert_eq!(
+            vira.numero.seguinte(),
+            Numero::Seis,
+            "R-08: a vira define só o número"
+        );
     }
 }
 
@@ -132,9 +158,16 @@ fn unicode_recusa_o_cavaleiro_que_o_baralho_frances_nao_tem() {
     // O bloco Unicode tem KNIGHT em 0x_C, entre o Valete e a Dama. Indexar as figuras em
     // sequência colocaria a Dama no Cavaleiro — foi o erro que este teste impede.
     for ch in ['🂬', '🂼', '🃌', '🃜'] {
-        assert!(Carta::do_unicode(ch).is_none(), "{ch} é KNIGHT, não existe no truco");
+        assert!(
+            Carta::do_unicode(ch).is_none(),
+            "{ch} é KNIGHT, não existe no truco"
+        );
     }
-    assert_eq!(c("Qp").unicode(), '🃝', "a Dama de paus é 0x1F0DD, não 0x1F0DC");
+    assert_eq!(
+        c("Qp").unicode(),
+        '🃝',
+        "a Dama de paus é 0x1F0DD, não 0x1F0DC"
+    );
     assert_eq!(c("Kp").unicode(), '🃞');
     assert_eq!(c("Jp").unicode(), '🃛');
 }
@@ -142,15 +175,24 @@ fn unicode_recusa_o_cavaleiro_que_o_baralho_frances_nao_tem() {
 #[test]
 fn costas_eh_o_playing_card_back() {
     assert_eq!(COSTAS, '🂠');
-    assert!(Carta::do_unicode(COSTAS).is_none(), "as costas não são uma carta jogável");
+    assert!(
+        Carta::do_unicode(COSTAS).is_none(),
+        "as costas não são uma carta jogável"
+    );
 }
 
 #[test]
 fn no_json_a_carta_eh_o_caractere_e_nada_mais() {
     let j = serde_json::to_string(&c("Ap")).unwrap();
-    assert_eq!(j, "\"🃑\"", "o protocolo manda o caractere, não um objeto inventado");
+    assert_eq!(
+        j, "\"🃑\"",
+        "o protocolo manda o caractere, não um objeto inventado"
+    );
     let volta: Carta = serde_json::from_str("\"🃑\"").unwrap();
     assert_eq!(volta, c("Ap"));
     assert!(serde_json::from_str::<Carta>("\"As de paus\"").is_err());
-    assert!(serde_json::from_str::<Carta>("\"🂬\"").is_err(), "KNIGHT não entra");
+    assert!(
+        serde_json::from_str::<Carta>("\"🂬\"").is_err(),
+        "KNIGHT não entra"
+    );
 }
