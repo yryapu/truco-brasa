@@ -12,6 +12,20 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let endereco = std::env::var("TRUCO_ENDERECO").unwrap_or_else(|_| "127.0.0.1:8080".into());
+
+    // `truco --saude` serve ao HEALTHCHECK do container: o binário pergunta a si mesmo e
+    // sai 0 ou 1. Sem isso a imagem final precisaria de `curl` instalado só para isso, e
+    // ferramenta de rede numa imagem de produção é superfície que não compra nada.
+    if std::env::args().any(|a| a == "--saude") {
+        let alvo = format!("http://{}/saude", endereco.replace("0.0.0.0", "127.0.0.1"));
+        let ok = reqwest::Client::new()
+            .get(&alvo)
+            .timeout(std::time::Duration::from_secs(3))
+            .send()
+            .await
+            .is_ok_and(|r| r.status().is_success());
+        std::process::exit(i32::from(!ok));
+    }
     let banco = std::env::var("TRUCO_BANCO").unwrap_or_else(|_| "sqlite://truco.db".into());
     // Padrão: desenvolvimento. Em produção atrás de TLS, `TRUCO_SEGURO=1` liga o `Secure`
     // no cookie e fecha o webhook em `http://`.

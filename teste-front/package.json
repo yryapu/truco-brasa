@@ -1,0 +1,6 @@
+{
+  "name": "truco-teste-front",
+  "private": true,
+  "scripts": { "teste": "playwright test" },
+  "devDependencies": { "@playwright/test": "^1.56.0" }
+}

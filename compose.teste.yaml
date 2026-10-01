@@ -1,0 +1,27 @@
+# Sobe o servidor e roda o teste de interface contra ele. Dois serviços, uma rede interna:
+# o Playwright fala com `http://truco:8080` e nada precisa ser publicado na máquina.
+services:
+  truco:
+    build: .
+    environment:
+      TRUCO_ENDERECO: "0.0.0.0:8080"
+      TRUCO_BANCO: "sqlite:///tmp/truco.db"
+      RUST_LOG: "info"
+    tmpfs: ["/tmp"]
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+
+  front:
+    image: mcr.microsoft.com/playwright:v1.56.0-noble
+    depends_on:
+      truco:
+        condition: service_healthy
+    working_dir: /teste
+    volumes: ["./teste-front:/teste"]
+    environment:
+      BASE: "http://truco:8080"
+      CI: "1"
+    # `npm ci` não dá, porque não versionamos lockfile de node para uma pasta de teste;
+    # `npm install --no-audit --no-fund` é suficiente e a imagem já traz os navegadores.
+    command: sh -lc "npm install --no-audit --no-fund --silent && npx playwright test"

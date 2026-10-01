@@ -1,0 +1,18 @@
+services:
+  truco:
+    build: .
+    # Só no laço da máquina: a v1 não tem TLS, e publicar 0.0.0.0 exporia cookie de sessão
+    # em claro na rede local. Quem for pôr em pé de verdade põe um proxy TLS na frente e
+    # liga TRUCO_SEGURO=1.
+    ports: ["127.0.0.1:8080:8080"]
+    volumes: ["dados:/dados"]
+    environment:
+      RUST_LOG: "info,truco_servidor=debug"
+    restart: unless-stopped
+    # Endurecimento barato: nada escreve na raiz, nada ganha privilégio novo.
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    tmpfs: ["/tmp"]
+volumes:
+  dados:

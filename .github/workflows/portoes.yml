@@ -1,0 +1,35 @@
+name: portões
+
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: rustfmt, clippy }
+      - uses: Swatinem/rust-cache@v2
+      # Quatro portões, e cada um falha sozinho: saber *qual* quebrou vale mais que uma
+      # linha verde única.
+      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo test --all
+      - run: cargo build --release --locked
+
+  front:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # Sobe o servidor em container e roda o Playwright contra ele, exatamente como na
+      # máquina de quem desenvolve (ADR-008). `--exit-code-from front` é o que faz a falha
+      # do teste reprovar o job em vez de só aparecer no log.
+      - run: docker compose -f compose.teste.yaml up --abort-on-container-exit --exit-code-from front
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rastro-playwright
+          path: teste-front/test-results/
+          if-no-files-found: ignore
