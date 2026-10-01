@@ -18,6 +18,13 @@ pub type Socket = WebSocketStream<MaybeTlsStream<TcpStream>>;
 
 /// Sobe um servidor de verdade numa porta efêmera. Devolve o endereço e o caminho do banco.
 pub async fn servidor(permitir_webhook_local: bool) -> (SocketAddr, tempdir::Guarda) {
+    servidor_com_prazo(permitir_webhook_local, std::time::Duration::from_secs(60)).await
+}
+
+pub async fn servidor_com_prazo(
+    permitir_webhook_local: bool,
+    prazo: std::time::Duration,
+) -> (SocketAddr, tempdir::Guarda) {
     let dir = tempdir::criar();
     let banco = format!("sqlite://{}/truco.db", dir.caminho());
     let app = truco_servidor::montar(
@@ -26,6 +33,7 @@ pub async fn servidor(permitir_webhook_local: bool) -> (SocketAddr, tempdir::Gua
             cookie_seguro: false,
             permitir_http_webhook: true,
             permitir_destino_privado: permitir_webhook_local,
+            prazo_de_jogada: prazo,
         },
     )
     .await

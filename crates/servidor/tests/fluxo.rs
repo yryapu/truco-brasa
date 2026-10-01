@@ -219,3 +219,105 @@ async fn nao_se_aposta_mais_do_que_se_tem_e_a_desistencia_devolve() {
     }
     assert!(devolveu, "quem fecha a aba na fila tem a aposta devolvida");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn quem_para_de_jogar_perde_no_prazo_e_o_dinheiro_do_outro_nao_fica_preso() {
+    // "O jogador cai" e "o jogador **para**" são coisas diferentes: queda fecha o socket e
+    // a mesa trata como abandono, mas quem deixa a aba aberta e não age nunca fecha nada.
+    // Sem o relógio, a mesa ficava de pé para sempre com a aposta do adversário dentro.
+    let (endereco, _dir) =
+        comum::servidor_com_prazo(false, std::time::Duration::from_millis(400)).await;
+    let ana = Cliente::registrar(endereco, "ana").await;
+    let bia = Cliente::registrar(endereco, "bia").await;
+
+    let mut s1 = ana.conectar("1x1", 100).await;
+    let mut s2 = bia.conectar("1x1", 100).await;
+
+    // Os dois recebem a mesa e o primeiro estado — e aí nenhum dos dois age.
+    for s in [&mut s1, &mut s2] {
+        loop {
+            if proxima(s).await["t"] == "estado" {
+                break;
+            }
+        }
+    }
+
+    // A mão 0 é puxada pelo assento 0, logo é a dupla 0 que está devendo a ação e perde.
+    let fim = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            let m = proxima(&mut s2).await;
+            if m["t"] == "fim" {
+                return m;
+            }
+        }
+    })
+    .await
+    .expect("a mesa tem de fechar sozinha no prazo");
+
+    assert_eq!(
+        fim["vencedora"], 1,
+        "quem estava devendo a jogada (dupla 0) perde"
+    );
+
+    // E o dinheiro saiu de onde estava preso: a soma volta a 2000, com 1100 e 900.
+    let mut saldos = [ana.moedas().await, bia.moedas().await];
+    saldos.sort_unstable();
+    assert_eq!(
+        saldos,
+        [900, 1100],
+        "o saldo liquidou em vez de ficar retido"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn oito_abas_apostando_tudo_ao_mesmo_tempo_nao_deixam_o_saldo_negativo() {
+    // Há duas defesas contra apostar o que não se tem: a conferência em `ws::entrar`, que lê
+    // o saldo da sessão, e a condição `AND moedas >= ?2` dentro do próprio UPDATE. A
+    // primeira é a que dá a mensagem bonita; a **segunda** é a que vale, porque oito abas
+    // simultâneas leem todas o mesmo saldo de 1000 e passam todas pela primeira.
+    //
+    // Este teste existe porque eu apaguei a condição do UPDATE e **nenhum teste ficou
+    // vermelho** — a conferência de `ws::entrar` escondia a falta dela. Sem este teste, a
+    // defesa que realmente importa não estava testada.
+    let (endereco, _dir) = comum::servidor(false).await;
+    let ana = Cliente::registrar(endereco, "ana").await;
+    assert_eq!(ana.moedas().await, 1000);
+
+    // Os sockets ficam **vivos** durante a conferência. Na primeira versão deste teste eu
+    // os deixava cair no fim de cada tentativa, e aí a devolução de quem desiste da fila já
+    // tinha repago a aposta antes de eu ler o saldo — comportamento certo, teste errado.
+    let tentativas = (0..8).map(|_| {
+        let token = ana.token.clone();
+        async move {
+            let url = format!("ws://{endereco}/ws?modo=2x2&aposta=1000");
+            let mut req = url.into_client_request().unwrap();
+            req.headers_mut().insert(
+                "Cookie",
+                HeaderValue::from_str(&format!("sessao={token}")).unwrap(),
+            );
+            tokio_tungstenite::connect_async(req)
+                .await
+                .ok()
+                .map(|(s, _)| s)
+        }
+    });
+    let abertas: Vec<_> = futures_util::future::join_all(tentativas)
+        .await
+        .into_iter()
+        .flatten()
+        .collect();
+
+    let saldo = ana.moedas().await;
+    assert!(
+        saldo >= 0,
+        "o saldo não pode ficar negativo, e ficou {saldo}"
+    );
+    assert_eq!(
+        abertas.len(),
+        1,
+        "só uma das oito podia ser cobrada; passaram {}",
+        abertas.len()
+    );
+    assert_eq!(saldo, 0, "exatamente uma aposta de 1000 foi cobrada");
+    drop(abertas);
+}

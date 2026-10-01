@@ -175,3 +175,27 @@ test('destino proibido é recusado pela interface com mensagem em português', a
     timeout: 20_000,
   });
 });
+
+test('do primeiro clique à mesa em menos de um minuto', async ({ browser }) => {
+  // O enunciado pede "o jogador entra e começa a jogar em menos de um minuto". Isto é o
+  // critério que eu marcaria como atendido sem verificar, então é o que precisa de número.
+  // Mede duas pessoas, do `goto` até a primeira carta na mão — não só o cadastro.
+  const t0 = Date.now();
+  const [ca, cb] = [await browser.newContext(), await browser.newContext()];
+  const [pa, pb] = [await ca.newPage(), await cb.newPage()];
+
+  await Promise.all([entrar(pa, nome('rapido-a')), entrar(pb, nome('rapido-b'))]);
+  const apósCadastro = Date.now() - t0;
+
+  await procurar(pa, '1x1', 0);
+  await procurar(pb, '1x1', 0);
+  await expect(t(pa, 'carta').first()).toBeVisible({ timeout: 30_000 });
+  await expect(t(pb, 'carta').first()).toBeVisible({ timeout: 30_000 });
+  const atéJogar = Date.now() - t0;
+
+  console.log(
+    `[medida] cadastro de dois jogadores: ${apósCadastro} ms · ` +
+      `até a carta na mão: ${atéJogar} ms`,
+  );
+  expect(atéJogar).toBeLessThan(60_000);
+});

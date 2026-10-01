@@ -197,7 +197,29 @@ async fn rodar(
         return encerrar(&estado, &ctx, &cadeiras, &partida, vencedora, true).await;
     }
 
-    while let Some(cmd) = cmd_rx.recv().await {
+    loop {
+        let cmd = match tokio::time::timeout(estado.config.prazo_de_jogada, cmd_rx.recv()).await {
+            Ok(Some(c)) => c,
+            // Todos os canais fecharam: não há mais ninguém para quem perguntar.
+            Ok(None) => return Ok(()),
+            Err(_) => {
+                // Ninguém agiu no prazo. Perde a dupla de quem estava devendo a ação — e a
+                // mesa fecha, que é o ponto: o dinheiro do outro não fica preso.
+                let devedor = quem_deve_agir(&partida);
+                difundir(
+                    &cadeiras,
+                    ParaCliente::Erro {
+                        erro: "tempo_esgotado",
+                        mensagem: format!(
+                            "ninguém jogou em {}s; a partida foi encerrada",
+                            estado.config.prazo_de_jogada.as_secs()
+                        ),
+                    },
+                );
+                let vencedora = 1 - truco_regras::equipe_de(devedor);
+                return encerrar(&estado, &ctx, &cadeiras, &partida, vencedora, true).await;
+            }
+        };
         match cmd {
             Comando::Agir(assento, acao) => {
                 match partida.aplicar(assento, acao, &mut rand::rng()) {
@@ -236,6 +258,24 @@ async fn rodar(
         }
     }
     Ok(())
+}
+
+/// Quem está devendo uma ação agora. É de quem o relógio corre.
+fn quem_deve_agir(partida: &Partida) -> usize {
+    let m = &partida.mao;
+    if m.aguarda_onze() {
+        // A decisão é da dupla que está com 11; o relógio corre para o assento dela que
+        // puxaria a mão.
+        if let truco_regras::TipoMao::Onze { equipe } = m.tipo {
+            return (0..partida.assentos())
+                .find(|a| truco_regras::equipe_de(*a) == equipe)
+                .unwrap_or(m.vez);
+        }
+    }
+    match m.pendencia {
+        Some(p) => p.assento_respondente,
+        None => m.vez,
+    }
 }
 
 fn codigo_do_erro(e: &truco_regras::Erro) -> &'static str {

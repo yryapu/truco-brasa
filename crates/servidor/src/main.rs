@@ -40,10 +40,16 @@ async fn main() -> anyhow::Result<()> {
             "TRUCO_WEBHOOK_LOCAL=1 com TRUCO_SEGURO=1 abriria SSRF em produção; escolha um"
         );
     }
+    // 60 s por ação é generoso para quem está pensando e curto para quem foi embora.
+    let prazo = std::env::var("TRUCO_PRAZO_SEGUNDOS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(60);
     let config = Config {
         cookie_seguro: seguro,
         permitir_http_webhook: !seguro,
         permitir_destino_privado: webhook_local,
+        prazo_de_jogada: std::time::Duration::from_secs(prazo),
     };
     let app = truco_servidor::montar(&banco, config).await?;
 

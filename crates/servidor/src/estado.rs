@@ -22,6 +22,13 @@ pub struct Config {
     /// desenvolvimento, e só liga por `TRUCO_WEBHOOK_LOCAL=1` — nunca junto de
     /// `TRUCO_SEGURO=1`, e o `main` recusa a combinação.
     pub permitir_destino_privado: bool,
+    /// Quanto tempo a mesa espera por uma ação de quem está devendo jogada.
+    ///
+    /// Existe porque "o jogador cai" e "o jogador **para**" são coisas diferentes: queda
+    /// fecha o socket e a mesa trata como abandono, mas quem deixa a aba aberta e não age
+    /// nunca fecha nada — e sem prazo a mesa fica de pé para sempre com a aposta do
+    /// adversário presa dentro dela.
+    pub prazo_de_jogada: std::time::Duration,
 }
 
 /// Um jogador esperando mesa.
