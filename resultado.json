@@ -5,7 +5,7 @@
     "operacional": "https://github.com/yryapu/truco-brasa"
   },
   "commit_final": "a6138c3a90f5d27af6e14c59ef103501f831f810",
-  "nota_sobre_commit_final": "É o commit que introduziu este arquivo. Um sha não pode constar do próprio commit, então existe exatamente um commit posterior a ele, e ele altera só este campo e esta nota. O estado do código provado por todos os comandos abaixo é o de 1f774c2dbdd61ee9961dc9b0386994d255d633ad, e nada nele mudou depois.",
+  "nota_sobre_commit_final": "É o commit em que o CÓDIGO congelou, e é o estado que todos os comandos deste arquivo provam. Um sha não pode constar do próprio commit, então os commits posteriores a ele existem e tocam **somente** este arquivo — verificável por: git diff --name-only a6138c3..HEAD → resultado.json. Uma versão anterior desta nota apontava 1f774c2 como o estado provado, e estava errada: a6138c3 também trouxe código (o teste de pedir truco pelo protocolo, e a remoção de uma expressão inalcançável que o clippy apontou).",
   "como_rodar": [
     "docker compose up --build    # http://127.0.0.1:8080",
     "cargo test --all             # 50 testes em Rust",
