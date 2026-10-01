@@ -22,6 +22,8 @@ services:
     environment:
       BASE: "http://truco:8080"
       CI: "1"
-    # `npm ci` não dá, porque não versionamos lockfile de node para uma pasta de teste;
-    # `npm install --no-audit --no-fund` é suficiente e a imagem já traz os navegadores.
+    # A versão do `@playwright/test` é **fixa e igual à da imagem** (sem `^`): a imagem traz
+    # os navegadores de uma versão só, e um `^1.56.0` instala 1.57 ou 1.58, que procura um
+    # build de Chromium que não está ali. Foi exatamente o erro que apareceu na primeira
+    # execução: "Executable doesn't exist at /ms-playwright/chromium_headless_shell-1243".
     command: sh -lc "npm install --no-audit --no-fund --silent && npx playwright test"

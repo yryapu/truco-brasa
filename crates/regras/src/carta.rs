@@ -94,6 +94,22 @@ impl Numero {
         }
     }
 
+    /// O rótulo curto do número, para mostrar "a manilha é o 4" sem desenhar uma carta.
+    pub const fn rotulo(self) -> &'static str {
+        match self {
+            Numero::Quatro => "4",
+            Numero::Cinco => "5",
+            Numero::Seis => "6",
+            Numero::Sete => "7",
+            Numero::Dama => "Q",
+            Numero::Valete => "J",
+            Numero::Rei => "K",
+            Numero::As => "A",
+            Numero::Dois => "2",
+            Numero::Tres => "3",
+        }
+    }
+
     /// O número seguinte na ordem de força, de forma **circular** — é o que faz a vira `3`
     /// dar manilha `4` (R-05).
     pub fn seguinte(self) -> Numero {

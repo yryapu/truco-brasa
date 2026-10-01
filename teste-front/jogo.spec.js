@@ -142,7 +142,12 @@ test('o saguão mostra emblema, ranking e webhook, e o segredo aparece uma vez',
 
   // Webhook: registrar devolve o segredo, e ele aparece na tela uma vez.
   await p.locator('#aba-hooks').click();
-  await t(p, 'campo-webhook-url').fill('https://exemplo.invalid/entrega');
+  // `example.com` e não `exemplo.invalid`: a guarda de destino resolve o host e recusa o
+  // que não resolve (ADR-004), então um domínio inexistente é legitimamente rejeitado — foi
+  // o que a primeira execução deste teste mostrou. `example.com` é reservado pela IANA para
+  // exemplos, resolve, é público, e nunca recebe entrega porque nenhuma partida acontece
+  // aqui. O custo é que este teste precisa de DNS.
+  await t(p, 'campo-webhook-url').fill('https://example.com/entrega');
   await t(p, 'btn-webhook-registrar').click();
   const segredo = t(p, 'webhook-segredo');
   await expect(segredo).toBeVisible({ timeout: 20_000 });

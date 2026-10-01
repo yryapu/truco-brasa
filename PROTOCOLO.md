@@ -64,7 +64,7 @@ cliente:
 ```json
 {"t":"estado","assento":1,"equipe":1,"modo":"dois_contra_dois",
  "placar":[3,6],"numero_da_mao":4,
- "vira":"🃅","manilha":"🃖",
+ "vira":"🃅","manilha":"6",
  "minhas_cartas":["🂡","🃝","4🃔"],
  "cartas_do_parceiro":null,
  "mesa":[{"assento":0,"carta":"🂣","coberta":false},
@@ -75,6 +75,11 @@ cliente:
  "aguarda_onze":false,"vencedora":null,
  "acoes":["jogar","jogar_coberta"]}
 ```
+
+`manilha` é o **número** ("4", "Q", "A"), não uma carta. Uma versão anterior mandava o
+caractere da carta daquele número em paus, e isso era errado de duas formas: sugeria que o
+zap estava na mesa, e quando um jogador tinha aquela carta de paus na mão, o indicador na
+tela de **todos** virava um glifo idêntico à carta dele. Foi o teste de interface que pegou.
 
 O invariante que o teste prova (`visao_nunca_vaza`): **nenhum caractere de carta que apareça
 em `estado` para o assento `i` pertence à mão de outro assento**, e carta coberta não traz

@@ -27,9 +27,15 @@ pub struct Visao {
     pub placar: [u8; 2],
     pub numero_da_mao: u32,
     pub vira: Carta,
-    /// O número das manilhas desta mão, como caractere de carta de paus (só para a interface
-    /// mostrar "a manilha é o 6"); a força real vem do servidor.
-    pub manilha: char,
+    /// O **número** das manilhas desta mão ("4", "Q", "A"), não uma carta.
+    ///
+    /// Antes isto era o caractere da carta daquele número no naipe de paus, e era um defeito
+    /// de duas pontas: o jogador lia o indicador como se o zap estivesse na mesa, e quando
+    /// alguém tinha justamente aquela carta de paus na mão, o glifo na tela de todos era
+    /// idêntico à carta dele. Quem achou foi o teste de interface, não os testes de regra —
+    /// eles só comparavam a visão com a mão dos outros assentos, e a coincidência dependia
+    /// de qual carta tinha sido distribuída.
+    pub manilha: &'static str,
     pub minhas_cartas: Vec<Carta>,
     /// Só preenchido na mão de onze da própria dupla (R-25). `None` no resto do jogo.
     pub cartas_do_parceiro: Option<Vec<Carta>>,
@@ -67,7 +73,7 @@ impl Visao {
             placar: p.placar,
             numero_da_mao: p.numero_da_mao,
             vira: m.vira,
-            manilha: Carta::nova(m.manilha, crate::carta::Naipe::Paus).unicode(),
+            manilha: m.manilha.rotulo(),
             minhas_cartas: m.cartas[assento].clone(),
             cartas_do_parceiro,
             mesa: m

@@ -720,3 +720,56 @@ fn fim_da_mao_carrega_os_pontos_que_foram_para_o_placar() {
     assert_eq!(fim.vencedora(), Some(0));
     assert_eq!(fim.pontos(), 1);
 }
+
+#[test]
+fn a_visao_so_contem_as_cartas_que_aquele_assento_tem_direito_de_ver() {
+    use std::collections::BTreeSet;
+    use truco_regras::visao::Visao;
+
+    // Este teste é mais forte que o anterior de propósito. O outro perguntava "a visão
+    // contém carta de outro assento?", e isso deixava passar um glifo de carta que não
+    // viesse da mão de ninguém — foi exatamente o furo do indicador de manilha, que
+    // desenhava a carta de paus daquele número e só colidia quando alguém tinha justamente
+    // aquela carta. Aqui a pergunta é a outra: **todo** caractere de carta na visão tem de
+    // estar no conjunto permitido.
+    let mut p = Partida::nova(Modo::DoisContraDois, &mut rng());
+    let n = p.assentos();
+
+    // Uma rodada completa e meia, com uma carta de costas.
+    for _ in 0..n {
+        let vez = p.mao.vez;
+        joga(&mut p, vez, 0);
+    }
+    let vez = p.mao.vez;
+    esconde(&mut p, vez, 0);
+    let vez = p.mao.vez;
+    joga(&mut p, vez, 0);
+
+    for assento in 0..n {
+        let v = Visao::para(&p, assento);
+        let json = serde_json::to_string(&v).unwrap();
+
+        // Tudo que é carta, em qualquer campo, em qualquer nível.
+        let encontradas: BTreeSet<char> = json
+            .chars()
+            .filter(|c| truco_regras::Carta::do_unicode(*c).is_some())
+            .collect();
+
+        let mut permitidas: BTreeSet<char> =
+            p.mao.cartas[assento].iter().map(|c| c.unicode()).collect();
+        permitidas.insert(p.mao.vira.unicode());
+        for j in &p.mao.mesa {
+            // Carta de costas não entra: ela não é visível para ninguém.
+            if !j.coberta {
+                permitidas.insert(j.carta.unicode());
+            }
+        }
+
+        let sobrando: Vec<char> = encontradas.difference(&permitidas).copied().collect();
+        assert!(
+            sobrando.is_empty(),
+            "assento {assento} recebeu {sobrando:?}, que não é nem a mão dele, nem a vira, \
+             nem carta aberta na mesa"
+        );
+    }
+}
