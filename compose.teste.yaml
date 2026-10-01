@@ -16,6 +16,10 @@ services:
 
   front:
     image: mcr.microsoft.com/playwright:v1.56.0-noble
+    # Chromium usa /dev/shm para memória compartilhada entre os seus processos. O padrão do
+    # Docker é 64 MB; com várias abas e uma interface com animação ele estoura e o navegador
+    # morre com "Target crashed". É pegadinha conhecida de rodar Chromium em container.
+    shm_size: "1gb"
     depends_on:
       truco:
         condition: service_healthy
@@ -29,3 +33,19 @@ services:
     # build de Chromium que não está ali. Foi exatamente o erro que apareceu na primeira
     # execução: "Executable doesn't exist at /ms-playwright/chromium_headless_shell-1243".
     command: sh -lc "npm install --no-audit --no-fund --silent && npx playwright test"
+
+  # Tira as fotos do README. Bot lento de propósito: o truco esperando resposta dura menos
+  # que um piscar com o bot normal, e é um dos momentos que a foto precisa mostrar.
+  capturas:
+    image: mcr.microsoft.com/playwright:v1.56.0-noble
+    shm_size: "1gb"
+    profiles: ["capturas"]
+    depends_on:
+      truco:
+        condition: service_healthy
+    working_dir: /teste
+    volumes: ["./teste-front:/teste"]
+    environment:
+      BASE: "http://truco:8080"
+      CI: "1"
+    command: sh -lc "npm install --no-audit --no-fund --silent && npx playwright test --config=playwright.capturas.config.js"

@@ -3,6 +3,9 @@
 // (`BASE=http://127.0.0.1:8080`), sem nada de container dentro do teste. Ver ADR-008.
 module.exports = {
   testDir: '.',
+  // As capturas do README não são teste: não afirmam nada, e um arquivo que não afirma
+  // nada não deve poder reprovar o CI. Elas rodam por playwright.capturas.config.js.
+  testIgnore: ['capturas.spec.js'],
   timeout: 120_000,
   expect: { timeout: 15_000 },
   // Um worker: os testes dividem a mesma fila de pareamento do servidor, e dois testes

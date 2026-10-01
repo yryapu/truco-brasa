@@ -7,9 +7,9 @@
   "commit_final": "a6138c3a90f5d27af6e14c59ef103501f831f810",
   "nota_sobre_commit_final": "É o commit em que o CÓDIGO congelou, e é o estado que todos os comandos deste arquivo provam. Um sha não pode constar do próprio commit, então os commits posteriores a ele existem e tocam **somente** este arquivo — verificável por: git diff --name-only a6138c3..HEAD → resultado.json. Uma versão anterior desta nota apontava 1f774c2 como o estado provado, e estava errada: a6138c3 também trouxe código (o teste de pedir truco pelo protocolo, e a remoção de uma expressão inalcançável que o clippy apontou).",
   "como_rodar": [
-    "docker compose up --build    # http://127.0.0.1:8080",
-    "cargo test --all             # 50 testes em Rust",
-    "docker compose -f compose.teste.yaml up --build --abort-on-container-exit --exit-code-from front    # 4 testes de interface"
+    "docker compose up --build    # http://127.0.0.1:8080  (TRUCO_PORTA=8477 para outra porta)",
+    "cargo test --all             # 57 testes em Rust",
+    "docker compose -f compose.teste.yaml up --build --abort-on-container-exit --exit-code-from front    # 7 testes de interface"
   ],
   "criterios": [
     {
@@ -23,14 +23,14 @@
       "id": "C2",
       "texto": "jogável 1x1, partida completa até 12 pontos",
       "atendido": true,
-      "prova": "cargo test --test fluxo → uma_partida_1x1_inteira_do_cadastro_ao_pagamento: ok. Assere placar com alguém ≥ 12 e as duas pontas concordando sobre vencedor e placar. E pela interface: Playwright '1x1: dois navegadores se encontram, jogam até 12, e o saldo fecha' ✓ (7.3s).",
+      "prova": "cargo test --test fluxo → uma_partida_1x1_inteira_do_cadastro_ao_pagamento: ok. Assere placar com alguém ≥ 12 e as duas pontas concordando sobre vencedor e placar. E pela interface: Playwright '1x1: dois navegadores se encontram, jogam até 12, e o saldo fecha' ✓ (7.3s). E, para quem está sozinho: cargo test --test bots → treino_1x1_contra_bot_vai_ate_os_doze_sozinho: ok (exige placar[vencedora] >= 12, o que falha se a mesa tiver expirado no relógio em vez de ter sido jogada); Playwright 'treino contra bot' ✓.",
       "refuta": "rodar a partida e ver o placar fechar com menos de 12, ou as duas pontas discordarem do vencedor."
     },
     {
       "id": "C3",
       "texto": "jogável 2x2 (duplas), com parceiro à frente",
       "atendido": true,
-      "prova": "cargo test --test fluxo → uma_partida_2x2_inteira_com_quatro_jogadores: ok. Quatro clientes WebSocket, os quatro concordando sobre vencedor e placar, soma de saldos conservada em 4000.",
+      "prova": "cargo test --test fluxo → uma_partida_2x2_inteira_com_quatro_jogadores: ok. Quatro clientes WebSocket, os quatro concordando sobre vencedor e placar, soma de saldos conservada em 4000. Treino 2x2: cargo test --test bots → treino_2x2_enche_a_mesa_com_tres_bots: ok, com o parceiro no assento 2 e na mesma dupla.",
       "refuta": "montar a mesa 2x2 e verificar que equipe_de(assento) não põe o parceiro em assento+2; ou a partida não fechar com quatro jogadores."
     },
     {
@@ -72,8 +72,8 @@
       "id": "C9",
       "texto": "comunicação em tempo real por WebSocket, com a carta como o próprio caractere Unicode",
       "atendido": true,
-      "prova": "cargo test --all → no_json_a_carta_eh_o_caractere_e_nada_mais: serde_json::to_string(ás de paus) == \"\\\"🃑\\\"\", e \"As de paus\" e \"🂬\" (KNIGHT) são recusados na volta. unicode_bate_com_o_exemplo_do_enunciado: os quatro ases do enunciado são U+1F0A1/B1/C1/D1. unicode_ida_e_volta_nas_quarenta: todas as 40. No fluxo real, jogar_ate_o_fim valida que cada item de minhas_cartas é UM caractere e é carta do baralho de 40. Playwright confere o glifo na tela com ehCartaDoTruco().",
-      "refuta": "abrir a aba Network do navegador numa partida e achar no quadro do WebSocket qualquer carta que não seja um único caractere do bloco Playing Cards."
+      "prova": "cargo test --all → no_json_a_carta_eh_o_caractere_e_nada_mais: serde_json::to_string(ás de paus) == \"\\\"🃑\\\"\", e \"As de paus\" e \"🂬\" (KNIGHT) são recusados na volta. unicode_bate_com_o_exemplo_do_enunciado: os quatro ases do enunciado são U+1F0A1/B1/C1/D1. unicode_ida_e_volta_nas_quarenta: todas as 40. No fluxo real, jogar_ate_o_fim valida que cada item de minhas_cartas é UM caractere e é carta do baralho de 40. Playwright confere o glifo na tela com ehCartaDoTruco(). E a rodada resolvida **permanece** no estado com as cartas: cargo test --test fluxo → a_rodada_resolvida_continua_no_estado_com_as_cartas_e_quem_levou: ok; Playwright 'a rodada resolvida fica em tela' ✓.",
+      "refuta": "abrir a aba Network do navegador numa partida e achar no quadro do WebSocket qualquer carta que não seja um único caractere do bloco Playing Cards. E: jogar uma carta, esperar a resposta do adversário, e verificar se a carta dele continua na tela depois de a rodada fechar. Se desaparecer, o item cai — foi exatamente assim que o defeito apareceu."
     },
     {
       "id": "C10",
@@ -118,6 +118,16 @@
       "o_que": "Playwright, dentro de container",
       "porque": "O que precisa ser provado é que DOIS navegadores independentes se encontram numa mesa: browser.newContext() dá duas sessões com cookies separados no mesmo processo, e a espera é por condição em vez de por tempo, que num jogo assíncrono é a diferença entre teste e teste intermitente. Em container porque o node desta máquina está quebrado (libllhttp pendurada do Homebrew) e consertar a instalação de quem avalia é efeito colateral que ninguém pediu.",
       "alternativa_descartada": "jsdom + Vitest (sem WebSocket real nem layout: eu testaria o meu próprio mock, e para um cliente cuja função é desenhar o que o servidor manda isso prova zero), Selenium (espera por tempo) e Cypress (um navegador por execução)."
+    },
+    {
+      "o_que": "O bot é um cliente do próprio protocolo, e mesa com bot não vale moeda nem ranking",
+      "porque": "O bot recebe a mesma Visao que um humano no mesmo assento e responde com as mesmas cinco mensagens — então fica incapaz de ver a carta do adversário, em vez de apenas não programado para ver; se alguém piorar a estratégia amanhã, continua impossível trapacear. E treino não pontua porque moeda saindo de um bot é inflação (ele não tem ficha de onde ela saia) e vitória contra bot no ranking seria implementar o farm de reputação que esta mesma entrega declarou como risco.",
+      "alternativa_descartada": "Dar ao bot o &Partida e deixá-lo calcular direto (torna a honestidade do bot uma questão de disciplina do código, e disciplina não sobrevive à manutenção); e deixar apostar contra bot criando as moedas, que é o que muitos jogos casuais fazem."
+    },
+    {
+      "o_que": "A rodada resolvida vai no protocolo; o histórico acumulado fica no cliente",
+      "porque": "O estado tem de ser suficiente para redesenhar a mesa sem memória — e a rodada resolvida É parte da mesa que está em tela, então ela tinha de entrar. O histórico de mãos passadas é um registro, não a mesa: mandá-lo em toda mensagem custaria alguns KB por ação, numa partida de poucos minutos, para um painel fechado por padrão.",
+      "alternativa_descartada": "Guardar o histórico no servidor e enviá-lo no estado — compra sobreviver a recarregar e a uma reconexão, e foi descartada porque NÃO EXISTE reconexão nesta versão, então não teria a quem servir. E uma rota GET /api/partidas/{id}/maos, que é a resposta certa no dia em que houver reconexão."
     }
   ],
   "previsoes": [
@@ -147,20 +157,26 @@
       "resultado": true
     },
     {
+      "claim": "Uma partida 1x1 de treino contra bot chega aos 12 sozinha, sem travar e sem o bot tentar jogada ilegal, na primeira execução do teste",
+      "p": 0.6,
+      "resultado": false,
+      "o_que_eu_aprendi": "A previsão tinha DUAS cláusulas unidas por 'e', e eu atribuí a probabilidade olhando só para a que me interessava ('chega aos 12', que deu certo). Caiu a outra. Previsão com duas cláusulas é mais fraca que a cláusula mais fraca dela — e 'o bot nunca faz jogada ilegal' eu daria bem menos que 0,6 se tivesse olhado para ela sozinha, porque eu nunca havia exercitado o motor de regras com um segundo cliente."
+    },
+    {
       "claim": "A janela de DNS rebinding na guarda de destino do webhook é atravessável por um atacante que controla o DNS do host registrado",
       "p": 0.9,
       "resultado": null,
       "por_que_null": "não verificada, de propósito: verificar exigiria atacar o próprio serviço. Está declarada como risco conhecido, não como item atendido."
     }
   ],
-  "nota_sobre_previsoes": "Brier medido pelo servidor de previsões sobre as cinco fechadas: 0,1500 (comando: previsao brier --by sessao-truco-brasa; previsao abertas devolve vazio). Três das cinco saíram melhor do que eu esperava, duas por margem larga. Isso é subconfiança sistemática, que é defeito de calibração igual ao excesso. O mecanismo que eu consigo nomear está na previsão de 0,35: contei o risco das APIs novas duas vezes, uma no build (onde ele de fato apareceu) e outra no comportamento, onde já tinha sido pago. A sexta está aberta de propósito: eu não a fechei porque não tratei o risco, e fechá-la exigiria atacar o próprio serviço. E a primeira quase ficou aberta por esquecimento — eu fechei as quatro que se verificavam por comando e esqueci justamente a que se fechava por leitura. A verificação que não tem saída de terminal é a que escapa.",
+  "nota_sobre_previsoes": "Brier medido pelo servidor de previsões: 6 itens, ≈0,18 (comando: previsao brier --by sessao-truco-brasa; previsao abertas devolve vazio). As cinco primeiras saíram todas a meu favor, três por margem larga, e eu havia registrado isso como subconfiança sistemática. A sexta errou, e a FORMA do erro ensina mais que o número: ela unia duas cláusulas com 'e' e eu só modelei uma. A sétima afirmação segue aberta de propósito — fechá-la exigiria atacar o próprio serviço.",
   "multiagente": {
     "usou": true,
     "porque": "Um subagente, para o cliente web — a única parte inteiramente determinada pelo protocolo e que não compartilha código com o servidor. Fixei o PROTOCOLO.md primeiro, justamente para poder construir servidor e cliente em paralelo. NÃO deleguei o motor de regras, de propósito: é a parte cuja correção invalida todo o resto, e delegar significaria não poder responder por que cada regra cita a fonte que cita.",
-    "custo": "63.055 tokens, 89,5 s de parede, 3 chamadas de ferramenta, 469 linhas de HTML+CSS+JS num arquivo (medido pela notificação de término do subagente e por wc -l).",
+    "custo": "Quatro invocações do mesmo subagente, retomado por mensagem com o contexto intacto: 63,1k tokens / 90 s (cliente inicial), 97,6k / 206 s (redesenho imersivo), 113,4k / 94 s (rodadas em tela e histórico), 116,7k / 17 s (ajuste para usar os campos novos). Total ≈ 391k tokens e ≈ 7 min de parede. Medido pelas notificações de término.",
     "valeu": true,
-    "valeu_porque": "Dois ganhos, e o segundo eu não esperava. (1) O cliente saiu funcionando: os 4 testes de Playwright passam contra ele, e eu só mudei duas linhas suas em toda a sessão (o indicador de manilha, por causa de um defeito MEU de protocolo). (2) Ele achou uma contradição no meu próprio PROTOCOLO.md — a tabela de rótulos dizia valor_proposto 3 = TRUCO e o meu exemplo narrava 'pediu SEIS' para valor_proposto 3 — e escolheu a tabela, que era a certa, em vez de escolher em silêncio. Um leitor independente do contrato pegou o que o autor do contrato não pegou. O custo é desprezível perto de escrever 469 linhas de interface à mão.",
-    "o_que_eu_faria_diferente": "Teria pedido que ele rodasse ao menos um `node --check` no JS — ele avisou honestamente que o script nunca foi sequer checado por sintaxe, e eu só descobri que estava íntegro quando o Playwright passou, meia hora depois."
+    "valeu_porque": "Dois ganhos, e o segundo é o que decide. (1) A interface saiu funcionando: os 7 testes de Playwright passam contra ela, e eu mexi em duas linhas suas em toda a sessão — por um defeito MEU de protocolo. (2) Ele apontou falta no meu contrato TRÊS vezes, em vez de contornar em silêncio: uma contradição entre a minha tabela de rótulos e o meu próprio exemplo; que estava tendo de adivinhar 'esta mão teve truco?' a partir da narração, e que isso falharia se um aviso se perdesse; e que o servidor não dizia qual carta levou a rodada, só a dupla. As três vezes estava certo, e as três viraram campo novo no protocolo. Um leitor independente do contrato vale mais que a economia de digitação.",
+    "o_que_eu_faria_diferente": "Teria pedido um `node --check` no JS desde a primeira vez — ele avisou com honestidade que o script nunca havia sido nem checado por sintaxe, e eu só soube que estava íntegro quando o Playwright passou. E teria delegado o motor de regras a NINGUÉM, como fiz: foi lá que apareceu o defeito que importava, e eu precisava poder responder por cada regra."
   },
   "riscos_conhecidos": [
     {
@@ -173,7 +189,7 @@
       "cenario": "uma pessoa cria duas contas, joga 1x1 contra si mesma com aposta 0, e repete",
       "efeito": "farma vitórias, sequência e emblemas; o ranking passa a medir paciência em vez de jogo. Com aposta 0 nenhuma moeda se move, então o saldo não é afetado — a reputação é",
       "paga": "todo jogador honesto do ranking",
-      "porque_nao_tratei": "não há limite de taxa no registro nem detecção de auto-jogo. O conserto barato é não contar partida em que dois assentos vêm do mesmo IP ou da mesma sessão, e isso tem falso positivo imediato (duas pessoas na mesma casa). Precisa de desenho, não de remendo."
+      "porque_nao_tratei": "não há limite de taxa no registro nem detecção de auto-jogo. O conserto barato é não contar partida em que dois assentos vêm do mesmo IP ou da mesma sessão, e isso tem falso positivo imediato (duas pessoas na mesma casa). Precisa de desenho, não de remendo. Os bots foram desenhados para NÃO piorar isto: mesa com bot não conta partida, vitória, emblema nem ranking (ADR-009), e a aposta é forçada a zero no servidor. Treinar não move nada."
     },
     {
       "cenario": "num 2x2, o parceiro da Ana fecha a aba na terceira mão",
@@ -227,10 +243,43 @@
   "tempo_minutos": 55,
   "nota_sobre_tempo": "Medido da primeira previsão registrada (2026-10-01T07:26:25Z, que é também quando a primeira fonte foi salva) até a escrita deste arquivo, por `date -u`. Os poucos minutos anteriores — conferir gh, cargo, docker e consultar o reino — não estão incluídos.",
   "numeros": {
-    "testes_rust": 50,
-    "testes_de_interface": 4,
-    "comando_que_conta": "cargo test 2>&1 | grep -E 'test result: ok' | awk '{s+=$4} END {print s}'  →  50 ; e o relatório do Playwright: '4 passed'",
-    "detalhe": "tests/cartas.rs 14 · tests/partida.rs 26 · tests/fluxo.rs 7 · tests/webhook.rs 3",
-    "portoes": "cargo fmt --all --check: ok · cargo clippy --all-targets --all-features -- -D warnings: 0 achados · docker compose -f compose.teste.yaml … --exit-code-from front: EXIT=0"
+    "testes_rust": 57,
+    "testes_de_interface": 7,
+    "comando_que_conta": "cargo test 2>&1 | grep -E 'test result: ok' | awk '{s+=$4} END {print s}'  →  57 ; e o relatório do Playwright: '7 passed'",
+    "detalhe": "tests/cartas.rs 14 · tests/partida.rs 27 · tests/fluxo.rs 9 · tests/webhook.rs 3 · tests/bots.rs 3 · unittests do servidor 1 (a propriedade do bot, que são 400 partidas)",
+    "portoes": "cargo fmt --all --check: ok · cargo clippy --all-targets --all-features -- -D warnings: 0 achados · docker compose -f compose.teste.yaml … --exit-code-from front: EXIT=0",
+    "capturas": "docker compose -f compose.teste.yaml --profile capturas run --rm capturas — as fotos do README saem daí, e ficam fora da suíte porque foto não afirma nada e um arquivo que não afirma nada não deve poder reprovar o CI."
+  },
+  "apos_a_v1": {
+    "o_que_isso_eh": "O que foi pedido e construído DEPOIS de a v1 ser declarada, com a prova de cada item. Está separado dos critérios de propósito: estes não eram critérios de aceitação da v1, e misturá-los faria a lista de feitos contar uma história falsa sobre o que foi entregue quando.",
+    "itens": [
+      {
+        "pedido": "crie bots pra podermos conseguir jogar",
+        "o_que_revelou": "Eu havia provado que a partida funciona, nunca que ela é jogável por quem está sozinho. Antes disso o jogo exigia duas pessoas para qualquer partida.",
+        "entregue": "Mesa de treino: 1x1 com um bot, 2x2 com três (um deles o seu parceiro). O bot é um cliente como qualquer outro — recebe a mesma Visao e responde com as mesmas cinco mensagens, então é INCAPAZ de ver carta alheia em vez de apenas não programado para ver (ADR-009).",
+        "prova": "cargo test --test bots → 3 passed; cargo test -p truco-servidor --lib → o_bot_nunca_devolve_jogada_ilegal_e_a_partida_sempre_termina (400 partidas) ok; Playwright 'treino contra bot' ✓ com moedas=1000 e partidas=0 ao fim.",
+        "custo_aceito": "Treino não vale moeda nem ranking. Quem só treina não progride — e a alternativa corromperia a única coisa que o ranking mede."
+      },
+      {
+        "pedido": "melhore UI pra deixar mais imersivo e bonito",
+        "entregue": "Cartas desenhadas em CSS/SVG a partir do ponto de código (o caractere Unicode continua sendo o dado, e vai em data-carta e no title de cada carta), feltro com vinheta, cor por dupla, dourado só para a vez / a manilha / o valor da mão, mão de onze e mão de ferro com tratamento próprio, selo de treino fixo.",
+        "prova": "Os 7 testes de interface passam contra ela (EXIT=0). Auditoria do arquivo: zero innerHTML/outerHTML/insertAdjacentHTML/document.write, zero recurso externo, todos os data-teste preservados.",
+        "custo_aceito": "A tipografia depende do que o sistema tem — não há fonte externa, porque o cliente é um arquivo embutido no binário e não pode buscar recurso nenhum."
+      },
+      {
+        "pedido": "dps q jogo a carta nao da pra ver oq o outro usuario jogou na sequencia […] deve ter o historico pra acompanhar/filtrar",
+        "o_que_revelou": "Defeito de PROTOCOLO, não de tela. O servidor limpava a mesa ao resolver a rodada, e o estado dizia quem levou SEM dizer com quais cartas — nenhum cliente, por bem escrito que fosse, conseguiria manter a rodada em tela. E sete testes de interface passavam: eu testei que a partida funciona, nunca que ela é acompanhável.",
+        "entregue": "estado.rodadas passou a trazer as jogadas, a dupla que levou e o assento que pôs a carta vencedora (que o cliente não pode derivar, porque não conhece a ordem de força — ADR-003). Aviso novo mao_resolvida com a mão inteira e o valor dela. Na tela: três faixas de rodada que ficam, com a carta vencedora destacada, e um painel de histórico filtrável por resultado, por 'só com truco' (valor > 1) e por jogador.",
+        "prova": "cargo test --test fluxo → a_rodada_resolvida_continua_no_estado_com_as_cartas_e_quem_levou e o_fim_da_mao_avisa_o_detalhe_inteiro_antes_de_a_mao_nova_comecar: ok; Playwright 'a rodada resolvida fica em tela' e 'o histórico guarda cada mão com as cartas, e filtra': ✓.",
+        "custo_aceito": "O histórico é montado no cliente, então recarregar a página o apaga. Isso está escrito na própria tela em vez de prometido e não cumprido — e o motivo é que não há reconexão nesta versão, logo um histórico persistente não teria a quem servir (ADR-010)."
+      }
+    ],
+    "defeito_de_regra_encontrado_no_caminho": {
+      "o_que": "Partida::aceitar devolvia a vez para o assento_pedinte da pendência CORRENTE. Numa cadeia de retrucos de tamanho par (A pede truco, B pede seis, A aceita), esse assento é B — que não devia carta nenhuma. A ordem de jogada corrompia e as mãos chegavam a contagens impossíveis (cartas_na_mao=[2,0,0,0]).",
+      "como_apareceu": "Um teste de PROPRIEDADE escrito para provar os bots: 400 partidas (200 sementes x 2 modos) com todos os assentos jogados pelo bot, exigindo que aplicar() nunca recuse a ação escolhida a partir de acoes. Falhou na semente 8.",
+      "a_parte_pior": "O meu próprio teste r15_r20 AFIRMAVA o comportamento errado (vez == 1, quando o certo é 0). Eu havia codificado o bug no teste, então nenhum teste de exemplo podia pegá-lo.",
+      "por_que_doze_testes_de_exemplo_nao_pegaram": "Eles conferiam o valor da escada (1→3→6→9→12), que estava certo, e nenhum conferia de quem era a vez depois dela. Teste de exemplo só verifica o que quem o escreveu pensou em verificar; teste de propriedade não precisa que eu imagine o caso.",
+      "registro": "https://github.com/yryapu/poliorketikos-truco-brasa/blob/main/refutacoes/R04-a-vez-seguia-a-cadeia-de-retrucos.md"
+    }
   }
 }
