@@ -53,12 +53,75 @@ pub struct Jogada {
     pub coberta: bool,
 }
 
+/// Uma jogada como qualquer um pode vê-la. É o que sai no protocolo.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct JogadaVisivel {
+    pub assento: usize,
+    /// `None` quando a carta foi jogada de costas. **Fica `None` para sempre**: a regra diz
+    /// que o valor não é revelado, e isso não expira quando a rodada fecha (R-14).
+    pub carta: Option<Carta>,
+    pub coberta: bool,
+}
+
+impl From<Jogada> for JogadaVisivel {
+    fn from(j: Jogada) -> Self {
+        JogadaVisivel {
+            assento: j.assento,
+            carta: (!j.coberta).then_some(j.carta),
+            coberta: j.coberta,
+        }
+    }
+}
+
+/// Uma rodada já resolvida, com as cartas e quem levou.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RodadaVisivel {
+    /// `None` = empatou.
+    pub vencedora: Option<u8>,
+    /// O assento que pôs a carta que levou a rodada. `None` quando empatou.
+    ///
+    /// Vem do servidor porque o cliente **não pode** derivá-lo: saber qual carta venceu
+    /// exige a ordem de força e a manilha, e o cliente não conhece as regras de propósito
+    /// (ADR-003). Sem este campo a interface só podia dizer "a dupla X levou", nunca "foi
+    /// esta carta" — e foi o próprio construtor da tela quem apontou a falta.
+    pub assento_vencedor: Option<usize>,
+    /// Na ordem em que as cartas foram à mesa.
+    pub jogadas: Vec<JogadaVisivel>,
+}
+
+// Sem `Deserialize`: `Rodada` é estado interno e nunca volta do protocolo — o que trafega
+// é `RodadaVisivel`, que esconde a carta de costas.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Rodada {
     /// `None` = rodada empatada (R-03, R-11).
     pub vencedor: Option<u8>,
     /// Quem puxa a rodada seguinte (R-12).
     pub puxador_seguinte: usize,
+    /// As jogadas desta rodada, na ordem.
+    ///
+    /// Guardadas porque a rodada resolvida **precisa continuar visível**. Antes a rodada só
+    /// levava o vencedor, e o servidor limpava a mesa ao resolvê-la: a carta do adversário
+    /// aparecia e desaparecia entre dois quadros, e nem um cliente perfeito conseguiria
+    /// mostrar a rodada, porque o dado não existia no protocolo.
+    pub jogadas: Vec<Jogada>,
+}
+
+impl Rodada {
+    pub fn visivel(&self) -> RodadaVisivel {
+        RodadaVisivel {
+            vencedora: self.vencedor,
+            // `puxador_seguinte` é, por R-12, quem pôs a carta do topo: o vencedor quando
+            // há vencedor, e o primeiro do empate quando não há. Só é o vencedor no
+            // primeiro caso, então o segundo não vira informação falsa.
+            assento_vencedor: self.vencedor.map(|_| self.puxador_seguinte),
+            jogadas: self
+                .jogadas
+                .iter()
+                .copied()
+                .map(JogadaVisivel::from)
+                .collect(),
+        }
+    }
 }
 
 /// Um pedido de truco/seis/nove/doze esperando resposta.
@@ -199,6 +262,25 @@ pub enum Aviso {
         fim: FimDaMao,
         placar: [u8; 2],
     },
+    /// O detalhe inteiro da mão que acabou: as rodadas com as cartas, como ela terminou, e
+    /// o placar depois dela.
+    ///
+    /// Existe porque o `estado` seguinte já é da **mão nova** — sem este aviso, a última
+    /// rodada de cada mão se perderia, que é exatamente o defeito que o jogador relatou.
+    MaoResolvida {
+        numero: u32,
+        vira: Carta,
+        /// O número das manilhas, como rótulo ("4", "Q", "A"), nunca como carta.
+        manilha: String,
+        /// Quanto a mão valia ao terminar: 1, 3, 6, 9 ou 12 (R-15). Com isto o histórico
+        /// filtra "mãos com truco" por `valor > 1`, em vez de reconstruir a partir dos
+        /// avisos de pedido — reconstrução que falha se um aviso se perder ou chegar fora
+        /// de ordem. Quem apontou a falta foi quem construiu a tela.
+        valor: u8,
+        rodadas: Vec<RodadaVisivel>,
+        fim: FimDaMao,
+        placar: [u8; 2],
+    },
     MaoDeOnze {
         equipe: u8,
     },
@@ -335,10 +417,12 @@ pub fn resolver_rodada(mesa: &[Jogada], manilha: Numero) -> Rodada {
     let disputando: Vec<&Jogada> = mesa.iter().filter(|j| !j.coberta).collect();
 
     // [DECISÃO] todas de costas: ninguém disputa, logo empate. Nenhuma fonte trata o caso.
+    let jogadas = mesa.to_vec();
     let Some(forca_maxima) = disputando.iter().map(|j| j.carta.forca(manilha)).max() else {
         return Rodada {
             vencedor: None,
             puxador_seguinte: mesa[0].assento,
+            jogadas,
         };
     };
 
@@ -357,11 +441,13 @@ pub fn resolver_rodada(mesa: &[Jogada], manilha: Numero) -> Rodada {
         Rodada {
             vencedor: Some(equipes[0]),
             puxador_seguinte: primeiro_do_topo,
+            jogadas,
         }
     } else {
         Rodada {
             vencedor: None,
             puxador_seguinte: primeiro_do_topo,
+            jogadas,
         }
     }
 }
@@ -645,12 +731,15 @@ impl Partida {
         }
 
         let rodada = resolver_rodada(&self.mao.mesa, self.mao.manilha);
+        // `Rodada` deixou de ser `Copy` quando passou a guardar as jogadas, então o que
+        // ainda é preciso depois do `push` é copiado antes dele.
+        let (vencedora, puxador_seguinte) = (rodada.vencedor, rodada.puxador_seguinte);
         self.mao.mesa.clear();
         self.mao.rodadas.push(rodada);
         avisos.push(Aviso::RodadaResolvida {
             indice: self.mao.rodadas.len() - 1,
-            vencedora: rodada.vencedor,
-            puxador_seguinte: rodada.puxador_seguinte,
+            vencedora,
+            puxador_seguinte,
         });
 
         match decidir_mao(&self.mao.rodadas) {
@@ -663,13 +752,32 @@ impl Partida {
                 let fim = FimDaMao::Cartas { vencedora, pontos };
                 self.encerrar_mao(fim, avisos, rng);
             }
-            None => self.mao.vez = rodada.puxador_seguinte,
+            None => self.mao.vez = puxador_seguinte,
         }
         Ok(())
     }
 
     fn encerrar_mao(&mut self, fim: FimDaMao, avisos: &mut Vec<Aviso>, rng: &mut impl Rng) {
         self.mao.fim = Some(fim);
+        // O detalhe primeiro, o resumo depois: quem processa os avisos em ordem monta o
+        // histórico e só então lê "a mão terminou".
+        avisos.push(Aviso::MaoResolvida {
+            numero: self.numero_da_mao,
+            vira: self.mao.vira,
+            manilha: self.mao.manilha.rotulo().to_string(),
+            valor: self.mao.valor,
+            rodadas: self.mao.rodadas.iter().map(Rodada::visivel).collect(),
+            fim,
+            placar: {
+                // O placar **depois** desta mão: soma aqui porque o crédito abaixo ainda
+                // não aconteceu.
+                let mut p = self.placar;
+                if let Some(e) = fim.vencedora() {
+                    p[e as usize] = p[e as usize].saturating_add(fim.pontos());
+                }
+                p
+            },
+        });
         if let Some(e) = fim.vencedora() {
             self.placar[e as usize] = self.placar[e as usize].saturating_add(fim.pontos());
         }

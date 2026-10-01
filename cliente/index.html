@@ -182,6 +182,48 @@ button.carta.mao:disabled{cursor:default;filter:saturate(.7) brightness(.78)}
 #fim button{margin-top:12px;width:100%}
 #log{height:150px;overflow-y:auto;background:rgba(0,0,0,.4);border:1px solid var(--linha);border-radius:10px;padding:8px 10px;font-size:.88rem;margin:6px 0 0;line-height:1.45}
 #log div{padding:1px 0;border-bottom:1px dotted rgba(255,255,255,.06)}
+/* faixas de rodada e historico */
+.faixas{list-style:none;margin:8px 0 0;padding:6px 8px;background:rgba(0,0,0,.3);border:1px solid var(--linha);border-radius:12px;display:grid;gap:4px}
+.faixa{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;padding:4px 6px;border-radius:8px;border-left:4px solid #5f8a73;background:rgba(255,255,255,.03);min-width:0}
+.faixa.nos{border-left-color:var(--eq0)}.faixa.eles{border-left-color:var(--eq1)}.faixa.empate{border-left-color:#aaa}
+.faixa.aberta{border-left-style:dashed;color:var(--suave);font-size:.82rem}
+.faixa .rot{font-size:.78rem;color:var(--suave);min-width:58px;font-weight:600}
+.faixa .jgs{display:flex;gap:5px;flex-wrap:wrap}
+.faixa .marca{margin-left:auto;font-size:.76rem;font-weight:700;border-radius:99px;padding:1px 10px;background:#444;color:#fff}
+.faixa.nos .marca{background:var(--eq0f);box-shadow:0 0 0 1px var(--eq0)}
+.faixa.eles .marca{background:var(--eq1f);box-shadow:0 0 0 1px var(--eq1)}
+.faixa.novo .marca{animation:marca .6s cubic-bezier(.2,1.6,.4,1)}
+.mj{display:inline-flex;flex-direction:column;align-items:center;gap:2px;opacity:.95}
+.mj .mn{font-size:.62rem;max-width:7ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-bottom:2px solid var(--cor)}
+.mj.eq0{--cor:var(--eq0)}.mj.eq1{--cor:var(--eq1)}
+.mj.dest .carta{outline:2px dashed #fff;outline-offset:2px}
+.mj.dest .mn{font-weight:700;color:#fff}
+.mj.vence .carta{box-shadow:0 0 0 3px var(--ouro),0 0 12px rgba(220,176,80,.65),0 3px 8px rgba(0,0,0,.45);transform:translateY(-2px)}
+.mj.vence .mn{color:var(--ouro2);font-weight:700}
+.mj .lv{font-size:.58rem;font-weight:800;background:var(--ouro);color:var(--tinta-ouro);border-radius:99px;padding:0 6px;line-height:1.4}
+.carta.mini{--cw:34px}
+.barra{display:flex;justify-content:flex-end;margin:0 0 6px}
+.barra button{padding:6px 12px;font-size:.88rem}
+#historico{position:fixed;top:0;right:0;bottom:0;width:min(100vw,430px);z-index:40;background:linear-gradient(180deg,#143d2b,#0b261b);border-left:2px solid var(--ouro);box-shadow:-12px 0 40px rgba(0,0,0,.6);overflow-y:auto;padding:14px 14px 30px}
+#historico .cab{display:flex;justify-content:space-between;align-items:center;gap:8px}
+#historico h2{margin:0}
+.filtros{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:10px 0}
+.filtros button{padding:6px 10px;font-size:.84rem}
+.filtros button[aria-pressed=true]{background:var(--ouro);color:var(--tinta-ouro);border-color:var(--ouro)}
+.filtros button[aria-pressed=false]{background:transparent;color:var(--texto);border-color:#6f9a80}
+.filtros label{display:flex;align-items:center;gap:6px;margin:0;font-size:.84rem}
+.filtros input[type=checkbox]{width:auto}
+.filtros select{width:auto;padding:6px;font-size:.84rem;max-width:100%}
+#hist-lista{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.mao-h{background:rgba(0,0,0,.3);border:1px solid var(--linha);border-left-width:5px;border-radius:10px;padding:8px 10px}
+.mao-h.ganhei{border-left-color:var(--eq0)}.mao-h.perdi{border-left-color:var(--eq1)}.mao-h.empate{border-left-color:#aaa}
+.mao-h .cab-m{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin-bottom:6px}
+.mao-h .cab-m strong{font-family:var(--serif);font-size:1.05rem}
+.mao-h ol{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.mao-h p{margin:6px 0 0;font-size:.86rem}
+.mao-h .tag-t{font-size:.72rem;font-weight:700;background:#822;color:#fff;border-radius:99px;padding:0 8px}
+.mao-h .pl{color:var(--suave);font-size:.8rem}
+@media (max-width:420px){.carta.mini{--cw:30px}.faixa .rot{min-width:50px}}
 @media (max-width:420px){
   main{padding:10px}
   .carta.mao{--cw:68px}#minha-mao{gap:8px}
@@ -276,6 +318,7 @@ button.carta.mao:disabled{cursor:default;filter:saturate(.7) brightness(.78)}
 <!-- MESA -->
 <section id="tela-mesa" hidden>
  <div data-teste="mesa" id="mesa-tela">
+  <div class="barra"><button id="btn-historico" data-teste="btn-historico" type="button" class="sec" aria-expanded="false" aria-controls="historico">Histórico (0)</button></div>
   <div class="hud">
    <div id="selo-treino" hidden><b>Treino</b><span>não vale moeda nem ranking</span></div>
    <div class="hud-1">
@@ -289,6 +332,7 @@ button.carta.mao:disabled{cursor:default;filter:saturate(.7) brightness(.78)}
    <div id="vez-faixa" role="status"></div>
   </div>
   <div class="tabuleiro" id="tabuleiro"></div>
+  <ol class="faixas" id="faixas" data-teste="rodadas" aria-label="rodadas da mão"></ol>
   <div id="parceiro" hidden></div>
   <div id="minha-mao" data-teste="minha-mao"></div>
   <div class="acoes">
@@ -303,6 +347,21 @@ button.carta.mao:disabled{cursor:default;filter:saturate(.7) brightness(.78)}
   <div id="erro" data-teste="erro" role="status" aria-live="polite"></div>
   <div id="fim" data-teste="fim" hidden></div>
   <div id="log" data-teste="log" aria-live="polite" role="log"></div>
+  <aside id="historico" data-teste="historico" role="dialog" aria-label="Histórico de mãos" hidden>
+   <div class="cab"><h2>Histórico de mãos</h2><button id="btn-hist-fechar" type="button" class="sec">Fechar</button></div>
+   <p class="dica">Fica só nesta sessão: é montado aqui, a partir do que chega na partida. Recarregar a página apaga tudo.</p>
+   <div class="filtros">
+    <span role="group" aria-label="Resultado" id="hist-res">
+     <button type="button" data-f="todas" aria-pressed="true">Todas</button>
+     <button type="button" data-f="ganhei" aria-pressed="false">Nós ganhamos</button>
+     <button type="button" data-f="perdi" aria-pressed="false">Eles ganharam</button>
+    </span>
+    <label><input type="checkbox" id="hist-truco"> Só com truco</label>
+    <label>Jogador <select id="hist-jog" aria-label="Filtrar por jogador"><option value="">todos</option></select></label>
+   </div>
+   <p class="dica" id="hist-cont" role="status"></p>
+   <ol id="hist-lista"></ol>
+  </aside>
  </div>
 </section>
 
@@ -334,6 +393,7 @@ function mostrar(n){telas.forEach(function(t){$('tela-'+t).hidden=(t!==n)});docu
 var eu=null, ws=null, fechandoDeProposito=false, emPartida=false, terminou=false;
 var apelidos={}, bots={}, equipes={}, meuAssento=null, nJog=2, ultimoEstado=null, cobertaLigada=false, treino=false;
 var prevMesa={}, prevRod=0, prevPend='';
+var historico=[], nPartida=0, fRes='todas', fTruco=false, fJog='';
 
 function api(metodo,url,corpo){
   var o={method:metodo,credentials:'same-origin',headers:{}};
@@ -508,12 +568,12 @@ function tratar(m){
      emPartida=true;meuAssento=m.assento;apelidos={};bots={};equipes={};
      (m.jogadores||[]).forEach(function(j){apelidos[j.assento]=j.apelido;bots[j.assento]=!!j.bot;equipes[j.assento]=j.equipe});
      nJog=(m.jogadores||[]).length||2;
-     treino=!!m.treino;prevMesa={};prevRod=0;prevPend='';
+     treino=!!m.treino;prevMesa={};prevRod=0;prevRodF=0;prevPend='';nPartida++;
      limpa($('log'));$('fim').hidden=true;$('erro').textContent='';cobertaLigada=false;
      $('selo-treino').hidden=!treino;
      mostrar('mesa');break;
    case 'estado':ultimoEstado=m;if(!emPartida){emPartida=true;meuAssento=m.assento;mostrar('mesa')}desenhar(m);break;
-   case 'avisos':(m.avisos||[]).forEach(function(a){logar(narrar(a))});break;
+   case 'avisos':(m.avisos||[]).forEach(function(a){if(a.aviso==='mao_resolvida')registrarMao(a);logar(narrar(a))});break;
    case 'erro':
      var e=$('erro');e.textContent=m.mensagem||m.erro||'erro';
      clearTimeout(e._t);e._t=setTimeout(function(){e.textContent=''},4000);break;
@@ -538,6 +598,7 @@ function narrar(a){
      if(f.como==='correu')return 'dupla '+f.vencedora+' levou '+f.pontos+' ponto(s) porque o outro lado correu.'+p;
      if(f.como==='onze_recusada')return 'mão de onze recusada: dupla '+f.vencedora+' levou '+f.pontos+' ponto(s).'+p;
      return 'dupla '+f.vencedora+' fez a mão, '+f.pontos+' pontos.'+p;
+   case 'mao_resolvida':return '';
    case 'mao_de_onze':return 'mão de onze para a dupla '+a.equipe;
    case 'mao_de_ferro':return 'mão de ferro';
    case 'mao_comecou':return 'mão '+a.numero+' começou ('+tipoStr(a.tipo)+')';
@@ -549,6 +610,101 @@ function narrar(a){
 function tipoStr(t){return t&&typeof t==='object'?String(t.tipo):String(t||'normal')}
 
 /* ---------- mesa ---------- */
+var prevRodF=0;
+/* ---------- rodadas com cartas (mesa) e historico ---------- */
+function vencDe(r){return r&&typeof r==='object'?(r.vencedora===undefined?null:r.vencedora):(r===undefined?null:r)}
+function miniJogada(j,ctx,dest,vence){
+  var eq=ctx.eqOf(j.assento);
+  var w=el('span','mj eq'+eq+(dest?' dest':'')+(vence?' vence':''));
+  w.appendChild(cartaEl(j.coberta||!j.carta?null:j.carta,'span','mini',eq));
+  w.appendChild(el('span','mn',ctx.nome(j.assento)));
+  if(vence){w.appendChild(el('span','lv','levou'));w.title='carta que levou a rodada';w.setAttribute('aria-label',nomeCarta(j.coberta||!j.carta?null:j.carta)+', de '+ctx.nome(j.assento)+', levou a rodada')}
+  return w;
+}
+function rodadaFaixa(r,i,ctx,novo){
+  var v=vencDe(r),js=(r&&typeof r==='object'&&r.jogadas)||[];
+  var li=el('li','faixa '+(v===null?'empate':(v===ctx.minhaEq?'nos':'eles'))+(novo?' novo':''));
+  li.appendChild(el('span','rot','Rodada '+(i+1)));
+  var g=el('span','jgs');
+  js.forEach(function(j){g.appendChild(miniJogada(j,ctx,ctx.jog&&ctx.nome(j.assento)===ctx.jog,v!==null&&r&&r.assento_vencedor===j.assento))});
+  li.appendChild(g);
+  li.appendChild(el('span','marca',v===null?'Empatou':(v===ctx.minhaEq?'Nós levamos':'Eles levaram')));
+  return li;
+}
+function desenharFaixas(rs,s,n){
+  var ul=$('faixas');limpa(ul);
+  var ctx={nome:nome,eqOf:function(a){return equipeDe(a,n)},minhaEq:s.equipe,jog:null};
+  rs.forEach(function(r,i){ul.appendChild(rodadaFaixa(r,i,ctx,i>=prevRodF))});
+  prevRodF=rs.length;
+  if(rs.length<3){
+    var a=el('li','faixa aberta','Rodada '+(rs.length+1)+': em disputa, as cartas estão no centro da mesa');
+    ul.appendChild(a);
+  }
+}
+function registrarMao(a){
+  var minhaEq=ultimoEstado?ultimoEstado.equipe:(equipes[meuAssento]!==undefined?equipes[meuAssento]:0);
+  historico.push({partida:nPartida,numero:a.numero,vira:a.vira,manilha:a.manilha,rodadas:a.rodadas||[],fim:a.fim||{},
+    placar:a.placar||[0,0],valor:a.valor,nomes:JSON.parse(JSON.stringify(apelidos)),equipes:JSON.parse(JSON.stringify(equipes)),n:nJog,minhaEq:minhaEq});
+  prevRodF=0;
+  renderHist();
+}
+function ehMinha(e){var v=e.fim.vencedora;return v===undefined||v===null?'empate':(v===e.minhaEq?'ganhei':'perdi')}
+function renderHist(){
+  $('btn-historico').textContent='Histórico ('+historico.length+')';
+  var sel=$('hist-jog'),nomes={};
+  historico.forEach(function(e){Object.keys(e.nomes).forEach(function(k){nomes[e.nomes[k]]=1})});
+  limpa(sel);var o0=el('option',null,'todos');o0.value='';sel.appendChild(o0);
+  Object.keys(nomes).forEach(function(nm){var o=el('option',null,nm);o.value=nm;sel.appendChild(o)});
+  if(fJog&&!nomes[fJog])fJog='';
+  sel.value=fJog;
+  var lista=$('hist-lista');limpa(lista);var mostradas=0;
+  for(var idx=historico.length-1;idx>=0;idx--){
+    var e=historico[idx];
+    var res=ehMinha(e);
+    if(fRes!=='todas'&&res!==fRes)continue;
+    if(fTruco&&!(e.valor>1))continue;
+    var nomeDe=function(a){return e.nomes[a]!==undefined?e.nomes[a]:('assento '+a)};
+    if(fJog){
+      var jogou=false;
+      e.rodadas.forEach(function(r){((r&&r.jogadas)||[]).forEach(function(j){if(nomeDe(j.assento)===fJog)jogou=true})});
+      if(!jogou)continue;
+    }
+    var ctx={nome:nomeDe,eqOf:function(a){return e.equipes[a]!==undefined?e.equipes[a]:(e.n===2?a:a%2)},minhaEq:e.minhaEq,jog:fJog};
+    var li=el('li','mao-h '+res);
+    var cab=el('div','cab-m');
+    cab.appendChild(el('strong',null,'Mão '+e.numero));
+    if(e.vira){cab.appendChild(document.createTextNode('vira '));cab.appendChild(cartaEl(e.vira,'span','mini'))}
+    cab.appendChild(el('span',null,'manilha '+e.manilha));
+    if(e.valor!==undefined&&e.valor!==null)cab.appendChild(el('span',e.valor>1?'tag-t':'pl','valeu '+e.valor));
+    cab.appendChild(el('span','pl','partida '+e.partida));
+    li.appendChild(cab);
+    var ol=el('ol');
+    e.rodadas.forEach(function(r,i){ol.appendChild(rodadaFaixa(r,i,ctx,false))});
+    li.appendChild(ol);
+    var f=e.fim,qm=function(v){return v===e.minhaEq?'Nós':'Eles'};
+    var tx;
+    if(f.vencedora===null||f.vencedora===undefined)tx='Empatou: ninguém pontuou.';
+    else if(f.como==='correu')tx=qm(f.vencedora)+' levou '+f.pontos+' ponto(s): o outro lado correu.';
+    else if(f.como==='onze_recusada')tx=qm(f.vencedora)+' levou '+f.pontos+' ponto(s): mão de onze recusada.';
+    else tx=qm(f.vencedora)+' fez a mão: '+f.pontos+' ponto(s).';
+    li.appendChild(el('p',null,tx));
+    li.appendChild(el('p','pl','Placar depois: Nós '+e.placar[e.minhaEq]+' x '+e.placar[1-e.minhaEq]+' Eles'));
+    lista.appendChild(li);mostradas++;
+  }
+  $('hist-cont').textContent=historico.length?('Mostrando '+mostradas+' de '+historico.length+' mãos, a mais recente primeiro.'):'Nenhuma mão resolvida ainda. Elas aparecem aqui conforme terminam.';
+}
+function abrirHist(abrir){
+  $('historico').hidden=!abrir;$('btn-historico').setAttribute('aria-expanded',String(abrir));
+  if(abrir){renderHist();$('btn-hist-fechar').focus()}else $('btn-historico').focus();
+}
+$('btn-historico').onclick=function(){abrirHist($('historico').hidden)};
+$('btn-hist-fechar').onclick=function(){abrirHist(false)};
+document.addEventListener('keydown',function(ev){if(ev.key==='Escape'&&!$('historico').hidden)abrirHist(false)});
+Array.prototype.forEach.call($('hist-res').querySelectorAll('button'),function(b){
+  b.onclick=function(){fRes=b.getAttribute('data-f');Array.prototype.forEach.call($('hist-res').querySelectorAll('button'),function(x){x.setAttribute('aria-pressed',String(x===b))});renderHist()};
+});
+$('hist-truco').onchange=function(){fTruco=this.checked;renderHist()};
+$('hist-jog').onchange=function(){fJog=this.value;renderHist()};
 function equipeDe(as,n){return equipes[as]!==undefined?equipes[as]:(n===2?as:as%2)}
 function placa(as,n,eu_){
   var p=el('div','placa eq'+equipeDe(as,n));
@@ -581,7 +737,7 @@ function desenhar(s){
   for(var i=0;i<3;i++){
     var pp=el('span','pip');
     if(i<rs.length){
-      var r=rs[i];
+      var r=vencDe(rs[i]);
       if(r===null){pp.classList.add('empate');pp.textContent='=';desc.push((i+1)+': empate')}
       else{pp.classList.add('eq'+r);pp.textContent=(r===minhaEq?'N':'E');desc.push((i+1)+': '+(r===minhaEq?'nós':'eles'))}
       if(i>=prevRod)pp.classList.add('novo');
@@ -590,6 +746,7 @@ function desenhar(s){
   }
   rd.setAttribute('aria-label','rodadas, '+desc.join('; '));
   prevRod=rs.length;
+  desenharFaixas(rs,s,n);
   /* faixa de vez + tipo */
   var vf=$('vez-faixa');limpa(vf);
   var minhaVez=s.vez===s.assento;

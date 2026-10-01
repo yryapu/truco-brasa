@@ -281,3 +281,73 @@ test('treino contra bot: jogo sozinho até o fim, e não vale moeda nem ranking'
   expect(eu.partidas).toBe(0);
   expect(eu.emblemas.map((e) => e.chave)).toContain('estreante');
 });
+
+test('a rodada resolvida fica em tela: vejo a carta do adversário e quem levou', async ({
+  browser,
+}) => {
+  // Regressão do defeito relatado por quem jogou: "depois que jogo a carta não dá para ver
+  // o que o outro jogou na sequência". Usa treino porque assim há **um** navegador e a
+  // ordem é determinística — no 1x1 a primeira mão é puxada por quem entrou.
+  const ctx = await contexto(browser);
+  const p = await ctx.newPage();
+  await entrar(p, nome('historia'));
+  await t(p, 'seletor-modo').selectOption('1x1');
+  await t(p, 'btn-treinar').click();
+  await expect(t(p, 'mesa')).toBeVisible({ timeout: 30_000 });
+
+  // A minha vez é a primeira. Joga a primeira carta e guarda qual foi.
+  const jogaveis = p.locator('[data-teste="carta"]:not([disabled])');
+  await expect(jogaveis.first()).toBeEnabled({ timeout: 20_000 });
+  const minhaCarta = await jogaveis.first().getAttribute('data-carta');
+  await jogaveis.first().click();
+
+  // O bot responde. A rodada fecha — e **continua em tela**, com as duas cartas.
+  const naRodada = p.locator('[data-teste="rodadas"] [data-carta]');
+  await expect
+    .poll(async () => naRodada.count(), { timeout: 30_000, message: 'a rodada resolvida tem de ficar' })
+    .toBeGreaterThanOrEqual(2);
+
+  const cartas = await naRodada.evaluateAll((es) =>
+    es.map((e) => e.getAttribute('data-carta')),
+  );
+  expect(cartas, 'a minha carta continua visível depois de a rodada fechar').toContain(
+    minhaCarta,
+  );
+  expect(
+    cartas.some((c) => c !== minhaCarta),
+    `a carta do adversário também: vi ${JSON.stringify(cartas)}`,
+  ).toBe(true);
+
+  // E a tela diz o que aconteceu com a rodada, não só mostra as cartas.
+  await expect(t(p, 'rodadas')).toContainText(/levamos|levaram|empatou/i);
+});
+
+test('o histórico guarda cada mão com as cartas, e filtra', async ({ browser }) => {
+  const ctx = await contexto(browser);
+  const p = await ctx.newPage();
+  await entrar(p, nome('hist'));
+  await t(p, 'seletor-modo').selectOption('1x1');
+  await t(p, 'btn-treinar').click();
+  await expect(t(p, 'mesa')).toBeVisible({ timeout: 30_000 });
+
+  // Joga até haver pelo menos duas mãos resolvidas no histórico.
+  const prazo = Date.now() + 90_000;
+  const botao = t(p, 'btn-historico');
+  while (Date.now() < prazo) {
+    const rotulo = (await botao.innerText().catch(() => '')) || '';
+    const quantas = Number((rotulo.match(/\d+/) || [0])[0]);
+    if (quantas >= 2 || (await t(p, 'fim').isVisible())) break;
+    if (!(await umPasso([p]))) await p.waitForTimeout(120);
+  }
+
+  await botao.click();
+  const painel = t(p, 'historico');
+  await expect(painel).toBeVisible();
+  // Cada mão se descreve: número, vira, manilha, quanto valeu, e as cartas das rodadas.
+  await expect(painel).toContainText(/mão/i);
+  await expect(painel).toContainText(/valeu/i);
+  expect(await painel.locator('[data-carta]').count()).toBeGreaterThan(0);
+  // E diz, na própria tela, que o histórico é só da sessão — sem prometer persistência.
+  // (`painel.or(body)` resolvia dois elementos e o modo estrito do Playwright recusa.)
+  await expect(p.locator('body')).toContainText(/sess[ãa]o/i);
+});

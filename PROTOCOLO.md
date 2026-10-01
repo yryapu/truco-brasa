@@ -69,7 +69,10 @@ cliente:
  "cartas_do_parceiro":null,
  "mesa":[{"assento":0,"carta":"🂣","coberta":false},
          {"assento":3,"carta":null,"coberta":true}],
- "rodadas":[0,null],
+ "rodadas":[{"vencedora":0,"assento_vencedor":2,
+             "jogadas":[{"assento":0,"carta":"🂣","coberta":false},
+                        {"assento":2,"carta":"🃑","coberta":false}]},
+            {"vencedora":null,"assento_vencedor":null,"jogadas":[…]}],
  "cartas_na_mao":[2,3,3,2],
  "vez":1,"valor":3,"tipo":"normal","pendencia":null,
  "aguarda_onze":false,"vencedora":null,
@@ -109,6 +112,31 @@ Logo o botão de pedir, com a mão valendo 1, diz "TRUCO!" (propõe 3); com a m�
 
 Isto está escrito porque eu descrevi a tabela de um jeito e dei um exemplo contraditório no
 mesmo texto. Quem construiu o cliente achou a contradição antes de mim, e escolheu a tabela.
+
+### Fim de mão: `mao_resolvida`
+
+Quando uma mão termina, o `estado` seguinte **já é da mão nova** — então o detalhe da que
+acabou se perderia. Por isso ele vem nos `avisos`, antes de `mao_terminou`:
+
+```json
+{"aviso":"mao_resolvida","numero":3,"vira":"🃅","manilha":"6","valor":6,
+ "rodadas":[{"vencedora":0,"assento_vencedor":2,"jogadas":[…]}, …],
+ "fim":{"como":"cartas","vencedora":0,"pontos":3},
+ "placar":[6,3]}
+```
+
+`valor` é quanto a mão valia ao terminar (1, 3, 6, 9 ou 12). Ele existe para que o histórico
+possa filtrar "mãos com truco" por `valor > 1` em vez de reconstruir a partir dos avisos de
+pedido — reconstrução que falha em silêncio se um aviso se perder ou chegar fora de ordem.
+
+`fim.vencedora` pode ser `null`: as três rodadas empataram e ninguém pontuou (R-11). Em mão
+que terminou porque alguém correu, `rodadas` pode ter menos de três entradas, e a última
+pode estar incompleta.
+
+O histórico de mãos é montado **no cliente**, a partir destes avisos. Isso é uma escolha, e
+tem custo: recarregar a página apaga o histórico. A alternativa — guardar o histórico no
+servidor e mandá-lo a cada estado — custaria alguns KB em toda mensagem de uma partida que
+dura poucos minutos. A tela diz que o histórico é da sessão em vez de prometer persistência.
 
 ## Webhooks
 

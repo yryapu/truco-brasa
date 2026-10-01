@@ -105,9 +105,11 @@ fn r27_chega_ou_passa_de_doze_e_a_partida_acaba() {
 
 #[test]
 fn r11_tabela_de_empate_caso_a_caso() {
+    // `jogadas` vazio: estas são rodadas sintéticas para exercitar só a tabela de empate.
     let r = |v: Option<u8>| Rodada {
         vencedor: v,
         puxador_seguinte: 0,
+        jogadas: Vec::new(),
     };
 
     // Uma rodada nunca decide a mão.
@@ -764,19 +766,44 @@ fn a_visao_so_contem_as_cartas_que_aquele_assento_tem_direito_de_ver() {
         let mut permitidas: BTreeSet<char> =
             p.mao.cartas[assento].iter().map(|c| c.unicode()).collect();
         permitidas.insert(p.mao.vira.unicode());
-        for j in &p.mao.mesa {
-            // Carta de costas não entra: ela não é visível para ninguém.
-            if !j.coberta {
-                permitidas.insert(j.carta.unicode());
-            }
+        // Carta aberta é pública para sempre: a da rodada em disputa e também a das rodadas
+        // já resolvidas, que a interface mantém em tela. Carta de costas não entra em
+        // nenhuma das duas — e isso **não expira** quando a rodada fecha (R-14).
+        let abertas = p
+            .mao
+            .mesa
+            .iter()
+            .chain(p.mao.rodadas.iter().flat_map(|r| r.jogadas.iter()))
+            .filter(|j| !j.coberta);
+        for j in abertas {
+            permitidas.insert(j.carta.unicode());
         }
 
         let sobrando: Vec<char> = encontradas.difference(&permitidas).copied().collect();
         assert!(
             sobrando.is_empty(),
             "assento {assento} recebeu {sobrando:?}, que não é nem a mão dele, nem a vira, \
-             nem carta aberta na mesa"
+             nem carta aberta (na mesa ou em rodada resolvida)"
         );
+
+        // E a recíproca, que é a parte que a rodada resolvida poderia ter quebrado: toda
+        // carta jogada de costas continua ausente da visão depois de a rodada fechar.
+        let cobertas: Vec<char> = p
+            .mao
+            .rodadas
+            .iter()
+            .flat_map(|r| r.jogadas.iter())
+            .chain(p.mao.mesa.iter())
+            .filter(|j| j.coberta)
+            .map(|j| j.carta.unicode())
+            .collect();
+        for c in cobertas {
+            assert!(
+                !encontradas.contains(&c),
+                "assento {assento} viu {c}, que foi jogada de costas — a rodada fechar não \
+                 revela carta coberta"
+            );
+        }
     }
 }
 

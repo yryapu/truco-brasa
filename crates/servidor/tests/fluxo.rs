@@ -429,3 +429,185 @@ async fn pedir_truco_e_correr_pelo_protocolo() {
     assert_eq!(novo["valor"], 1, "R-21: a mão seguinte volta a valer 1");
     assert_eq!(novo["numero_da_mao"], 1, "a mão seguinte começou");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_rodada_resolvida_continua_no_estado_com_as_cartas_e_quem_levou() {
+    // Regressão do defeito relatado por quem jogou: "depois que jogo a carta não dá para
+    // ver o que o outro jogou na sequência". A causa era de protocolo — o servidor limpava
+    // a mesa ao resolver a rodada e o `estado` dizia quem levou **sem dizer com quais
+    // cartas**, então nem um cliente perfeito conseguiria manter a rodada em tela.
+    let (endereco, _dir) = comum::servidor(false).await;
+    let ana = Cliente::registrar(endereco, "ana").await;
+    let bia = Cliente::registrar(endereco, "bia").await;
+    let mut s1 = ana.conectar("1x1", 0).await;
+    let mut s2 = bia.conectar("1x1", 0).await;
+
+    async fn estado(s: &mut comum::Socket) -> Value {
+        loop {
+            let m = proxima(s).await;
+            if m["t"] == "estado" {
+                return m;
+            }
+        }
+    }
+
+    let e1 = estado(&mut s1).await;
+    let e2 = estado(&mut s2).await;
+    assert_eq!(
+        e1["rodadas"].as_array().unwrap().len(),
+        0,
+        "nenhuma rodada resolvida ainda"
+    );
+
+    // Joga a rodada 1 inteira, guardando o que cada um pôs na mesa.
+    let (primeiro, segundo, carta_do_primeiro) = if e1["vez"] == e1["assento"] {
+        (
+            &mut s1,
+            &mut s2,
+            e1["minhas_cartas"][0].as_str().unwrap().to_string(),
+        )
+    } else {
+        (
+            &mut s2,
+            &mut s1,
+            e2["minhas_cartas"][0].as_str().unwrap().to_string(),
+        )
+    };
+    comum::manda(primeiro, json!({"t":"jogar","indice":0,"coberta":false})).await;
+    let depois = estado(segundo).await;
+    let carta_do_segundo = depois["minhas_cartas"][0].as_str().unwrap().to_string();
+    comum::manda(segundo, json!({"t":"jogar","indice":0,"coberta":false})).await;
+
+    // O primeiro estado com a rodada já resolvida: ela tem de carregar as duas cartas.
+    let resolvido = loop {
+        let m = estado(primeiro).await;
+        if !m["rodadas"].as_array().unwrap().is_empty() {
+            break m;
+        }
+    };
+    let r = &resolvido["rodadas"][0];
+    let jogadas = r["jogadas"]
+        .as_array()
+        .expect("a rodada resolvida carrega as jogadas");
+    assert_eq!(
+        jogadas.len(),
+        2,
+        "as duas cartas da rodada, não só o vencedor"
+    );
+    let cartas: Vec<&str> = jogadas
+        .iter()
+        .map(|j| j["carta"].as_str().unwrap())
+        .collect();
+    assert!(
+        cartas.contains(&carta_do_primeiro.as_str()),
+        "a carta de quem puxou está lá"
+    );
+    assert!(
+        cartas.contains(&carta_do_segundo.as_str()),
+        "e a do adversário também"
+    );
+
+    // E diz **quem** levou, por assento — o que o cliente não pode derivar sem conhecer a
+    // ordem de força (e ele não a conhece, por ADR-003).
+    if r["vencedora"].is_null() {
+        assert!(
+            r["assento_vencedor"].is_null(),
+            "empate não tem assento vencedor"
+        );
+    } else {
+        let venceu = r["assento_vencedor"]
+            .as_u64()
+            .expect("quem levou, por assento");
+        assert!(
+            jogadas
+                .iter()
+                .any(|j| j["assento"].as_u64() == Some(venceu)),
+            "o assento vencedor jogou nesta rodada"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn o_fim_da_mao_avisa_o_detalhe_inteiro_antes_de_a_mao_nova_comecar() {
+    // A outra metade do mesmo defeito: quando a **mão** acaba, o `estado` seguinte já é da
+    // mão nova, então a última rodada se perderia sem um aviso que a carregue.
+    let (endereco, _dir) = comum::servidor(false).await;
+    let ana = Cliente::registrar(endereco, "ana").await;
+    let bia = Cliente::registrar(endereco, "bia").await;
+    let s1 = ana.conectar("1x1", 0).await;
+    let s2 = bia.conectar("1x1", 0).await;
+
+    // Joga a partida inteira recolhendo os avisos `mao_resolvida`.
+    let coletar = |mut s: comum::Socket| async move {
+        let mut maos: Vec<Value> = Vec::new();
+        loop {
+            let m = proxima(&mut s).await;
+            match m["t"].as_str().unwrap_or_default() {
+                "fim" => return maos,
+                "avisos" => {
+                    for a in m["avisos"].as_array().unwrap() {
+                        if a["aviso"] == "mao_resolvida" {
+                            maos.push(a.clone());
+                        }
+                    }
+                }
+                "estado" => {
+                    let acoes = m["acoes"].as_array().cloned().unwrap_or_default();
+                    let tem = |x: &str| acoes.iter().any(|a| a == x);
+                    if tem("onze_aceitar") {
+                        comum::manda(&mut s, json!({"t":"onze","aceita":true})).await;
+                    } else if tem("aceitar") {
+                        comum::manda(&mut s, json!({"t":"aceitar"})).await;
+                    } else if tem("jogar") {
+                        comum::manda(&mut s, json!({"t":"jogar","indice":0,"coberta":false})).await;
+                    }
+                }
+                _ => {}
+            }
+        }
+    };
+    let (maos, _) = tokio::join!(coletar(s1), coletar(s2));
+
+    assert!(
+        !maos.is_empty(),
+        "a partida teve mãos, e cada uma avisou o seu detalhe"
+    );
+    for m in &maos {
+        // Cada mão resolvida se descreve sozinha: é o que o histórico consome.
+        assert!(m["vira"].as_str().is_some(), "a vira da mão");
+        assert!(
+            m["manilha"].as_str().is_some(),
+            "a manilha, como número e não carta"
+        );
+        let valor = m["valor"].as_u64().expect("quanto a mão valia");
+        assert!(
+            [1, 3, 6, 9, 12].contains(&valor),
+            "R-15: valor é 1/3/6/9/12, veio {valor}"
+        );
+        let rodadas = m["rodadas"].as_array().expect("as rodadas da mão");
+        assert!(!rodadas.is_empty() || m["fim"]["como"] != "cartas");
+        for r in rodadas {
+            for j in r["jogadas"].as_array().unwrap() {
+                // Carta de costas continua escondida **depois** de a mão acabar (R-14).
+                if j["coberta"] == true {
+                    assert!(
+                        j["carta"].is_null(),
+                        "a rodada fechar não revela carta coberta"
+                    );
+                }
+            }
+        }
+        assert_eq!(
+            m["placar"].as_array().unwrap().len(),
+            2,
+            "o placar depois da mão"
+        );
+    }
+    // O número da mão cresce de um em um, começando em zero.
+    let numeros: Vec<u64> = maos.iter().map(|m| m["numero"].as_u64().unwrap()).collect();
+    assert_eq!(
+        numeros,
+        (0..numeros.len() as u64).collect::<Vec<_>>(),
+        "{numeros:?}"
+    );
+}

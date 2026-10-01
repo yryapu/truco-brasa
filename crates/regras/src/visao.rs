@@ -8,16 +8,8 @@
 //! A única exceção é a da própria regra: na mão de onze a dupla vê as cartas entre si (R-25).
 
 use crate::carta::Carta;
-use crate::partida::{Modo, Partida, Pendencia, TipoMao, equipe_de};
+use crate::partida::{JogadaVisivel, Modo, Partida, Pendencia, RodadaVisivel, TipoMao, equipe_de};
 use serde::Serialize;
-
-#[derive(Debug, Clone, Serialize)]
-pub struct JogadaVisivel {
-    pub assento: usize,
-    /// `None` quando a carta foi jogada de costas: nem o valor, nem o naipe.
-    pub carta: Option<Carta>,
-    pub coberta: bool,
-}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Visao {
@@ -40,8 +32,11 @@ pub struct Visao {
     /// Só preenchido na mão de onze da própria dupla (R-25). `None` no resto do jogo.
     pub cartas_do_parceiro: Option<Vec<Carta>>,
     pub mesa: Vec<JogadaVisivel>,
-    /// Vencedora de cada rodada já resolvida; `None` dentro = rodada empatada.
-    pub rodadas: Vec<Option<u8>>,
+    /// Cada rodada já resolvida desta mão, **com as cartas** e quem levou.
+    ///
+    /// Era só a lista de vencedoras. Sem as cartas, a interface não tinha como manter a
+    /// rodada em tela, e o jogador perdia de vista o que o adversário jogou.
+    pub rodadas: Vec<RodadaVisivel>,
     /// Quantas cartas cada assento ainda tem. Contagem, nunca a carta.
     pub cartas_na_mao: Vec<usize>,
     pub vez: usize,
@@ -85,7 +80,11 @@ impl Visao {
                     coberta: j.coberta,
                 })
                 .collect(),
-            rodadas: m.rodadas.iter().map(|r| r.vencedor).collect(),
+            rodadas: m
+                .rodadas
+                .iter()
+                .map(crate::partida::Rodada::visivel)
+                .collect(),
             cartas_na_mao: m.cartas.iter().map(Vec::len).collect(),
             vez: m.vez,
             valor: m.valor,
