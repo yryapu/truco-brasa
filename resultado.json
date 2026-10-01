@@ -4,8 +4,8 @@
     "pesquisa": "https://github.com/yryapu/poliorketikos-truco-brasa",
     "operacional": "https://github.com/yryapu/truco-brasa"
   },
-  "commit_final": "1f774c2dbdd61ee9961dc9b0386994d255d633ad",
-  "nota_sobre_commit_final": "É o commit que este arquivo descreve — o estado provado por todos os comandos abaixo. O commit que acrescenta este arquivo é necessariamente posterior a ele, e contém só ele.",
+  "commit_final": "a6138c3a90f5d27af6e14c59ef103501f831f810",
+  "nota_sobre_commit_final": "É o commit que introduziu este arquivo. Um sha não pode constar do próprio commit, então existe exatamente um commit posterior a ele, e ele altera só este campo e esta nota. O estado do código provado por todos os comandos abaixo é o de 1f774c2dbdd61ee9961dc9b0386994d255d633ad, e nada nele mudou depois.",
   "como_rodar": [
     "docker compose up --build    # http://127.0.0.1:8080",
     "cargo test --all             # 50 testes em Rust",
